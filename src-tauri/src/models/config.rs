@@ -130,6 +130,12 @@ pub struct Settings {
     pub team_name: String,  // Teams 计划的团队名称
     #[serde(default = "default_seat_count", rename = "seatCount")]
     pub seat_count: i32,  // Teams 计划的席位数量
+    #[serde(default, rename = "yesCaptchaEnabled")]
+    pub yes_captcha_enabled: bool,  // 是否启用 YesCaptcha 自动验证
+    #[serde(default, rename = "yesCaptchaApiKey")]
+    pub yes_captcha_api_key: String,  // YesCaptcha API Key
+    #[serde(default, rename = "yesCaptchaApiEndpoint")]
+    pub yes_captcha_api_endpoint: String,  // YesCaptcha API 端点（可选）
 }
 
 fn default_browser_mode() -> String {
@@ -191,6 +197,9 @@ impl Default for Settings {
             payment_period: 1,  // 默认月付
             team_name: String::new(),  // 默认空团队名称
             seat_count: 1,  // 默认1个席位
+            yes_captcha_enabled: false,  // 默认关闭 YesCaptcha
+            yes_captcha_api_key: String::new(),  // 默认空 API Key
+            yes_captcha_api_endpoint: String::new(),  // 默认空端点
         }
     }
 }

@@ -14,6 +14,9 @@ const defaultSettings: Partial<Settings> = {
   useLightweightApi: true,
   proxyEnabled: false,
   proxyUrl: null,
+  yesCaptchaEnabled: false,
+  yesCaptchaApiKey: '',
+  yesCaptchaApiEndpoint: '',
 };
 
 export const useSettingsStore = defineStore('settings', () => {
