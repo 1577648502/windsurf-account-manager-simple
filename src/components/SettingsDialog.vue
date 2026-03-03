@@ -142,6 +142,53 @@
               当遇到连续的API请求失败时，可点击此按钮重置网络连接池
             </div>
           </el-form-item>
+          
+          <el-divider content-position="left">验证码自动解决</el-divider>
+          
+          <el-form-item label="启用 YesCaptcha">
+            <el-switch 
+              v-model="settings.yesCaptchaEnabled"
+              active-text="开启"
+              inactive-text="关闭"
+            />
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              开启后，批量获取试用链接时将自动使用 YesCaptcha 解决 Turnstile 验证码
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="YesCaptcha API Key" v-if="settings.yesCaptchaEnabled">
+            <el-input
+              v-model="settings.yesCaptchaApiKey"
+              placeholder="请输入 YesCaptcha API Key"
+              style="width: 350px;"
+              type="password"
+              show-password
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Key /></el-icon>
+              </template>
+            </el-input>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              在 <a href="https://yescaptcha.com/" target="_blank" style="color: #409EFF;">yescaptcha.com</a> 注册并获取 API Key
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="API 端点" v-if="settings.yesCaptchaEnabled">
+            <el-input
+              v-model="settings.yesCaptchaApiEndpoint"
+              placeholder="https://api.yescaptcha.com（留空使用默认）"
+              style="width: 350px;"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Connection /></el-icon>
+              </template>
+            </el-input>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              自定义 API 端点地址，如遇到网络问题可尝试修改（留空使用默认官方端点）
+            </div>
+          </el-form-item>
         </el-form>
       </el-tab-pane>
       
@@ -455,7 +502,7 @@
 <script setup lang="ts">
 import { ref, reactive, watch, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Connection } from '@element-plus/icons-vue';
+import { Connection, Key } from '@element-plus/icons-vue';
 import { useSettingsStore, useUIStore } from '@/store';
 import { invoke } from '@tauri-apps/api/core';
 import { systemApi } from '@/api';

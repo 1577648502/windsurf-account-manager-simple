@@ -180,6 +180,16 @@
             />
           </el-tooltip>
           
+          <el-tooltip content="批量获取试用链接" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
+            <el-button
+              type="primary"
+              :icon="Link"
+              circle
+              :loading="batchTrialLinkRunning"
+              @click="handleBatchGetTrialLink"
+            />
+          </el-tooltip>
+          
           <!-- 导出选中账号 -->
           <el-tooltip content="导出选中账号" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
@@ -421,6 +431,56 @@
     <!-- 虚拟卡生成对话框 -->
     <CardGeneratorDialog v-model="showCardGeneratorDialog" />
     
+    <!-- 批量试用链接进度弹窗 -->
+    <el-dialog
+      v-model="showBatchTrialDialog"
+      title="批量获取试用链接"
+      width="600px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="!batchTrialLinkRunning"
+    >
+      <div class="batch-trial-progress-content">
+        <div class="batch-trial-summary">
+          <span>总计: <strong>{{ batchTrialLinkProgress.total }}</strong></span>
+          <span style="color: #67c23a;">成功: <strong>{{ batchTrialLinkProgress.success }}</strong></span>
+          <span style="color: #f56c6c;">失败: <strong>{{ batchTrialLinkProgress.failed }}</strong></span>
+          <span style="color: #909399;">等待: <strong>{{ batchTrialLinkProgress.total - batchTrialLinkProgress.current }}</strong></span>
+        </div>
+        <el-progress
+          :percentage="batchTrialLinkProgress.total > 0 ? Math.round((batchTrialLinkProgress.current / batchTrialLinkProgress.total) * 100) : 0"
+          :stroke-width="10"
+          style="margin: 12px 0;"
+        />
+        <div class="batch-trial-list" style="max-height: 400px; overflow-y: auto;">
+          <div
+            v-for="acc in batchTrialAccounts"
+            :key="acc.id"
+            class="batch-trial-item"
+            :style="{ borderLeftColor: acc.status === 'success' ? '#67c23a' : acc.status === 'failed' ? '#f56c6c' : acc.status === 'waiting' ? '#dcdfe6' : '#409eff' }"
+          >
+            <div class="batch-trial-item-email">{{ acc.email }}</div>
+            <div class="batch-trial-item-status">
+              <el-icon v-if="['turnstile','getting_link','opening','filling','submitting'].includes(acc.status)" class="is-loading" style="margin-right: 4px;"><Loading /></el-icon>
+              <span :style="{ color: acc.status === 'success' ? '#67c23a' : acc.status === 'failed' ? '#f56c6c' : acc.status === 'waiting' ? '#909399' : '#409eff' }">
+                {{ acc.status === 'waiting' ? '等待中' : acc.status === 'turnstile' ? '获取验证码...' : acc.status === 'getting_link' ? '获取链接...' : acc.status === 'opening' ? '打开窗口...' : acc.status === 'filling' ? '自动填写...' : acc.status === 'submitting' ? '自动提交...' : acc.status === 'success' ? '✓ 完成' : '✗ ' + (acc.error || '失败') }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button v-if="batchTrialLinkRunning" type="danger" @click="batchTrialLinkStopped = true">停止</el-button>
+        <el-button v-else @click="showBatchTrialDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量试用链接的隐藏 Turnstile 容器（在batch操作期间保持在DOM中） -->
+    <div v-show="batchTrialLinkRunning" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);">
+      <div style="font-size: 12px; color: #909399; margin-bottom: 4px; text-align: center;">验证中...</div>
+      <div ref="batchTurnstileRef" class="cf-turnstile-batch"></div>
+    </div>
+    
     <!-- 账单对话框（传入当前查看的账号ID和数据） -->
     <BillingDialog 
       v-if="uiStore.currentViewingAccountId"
@@ -589,7 +649,8 @@ import {
   Timer,
   Switch,
   SortUp,
-  SortDown
+  SortDown,
+  Link
 } from '@element-plus/icons-vue';
 import { useAccountsStore, useSettingsStore, useUIStore } from '@/store';
 import { apiService, settingsApi, accountApi } from '@/api';
@@ -631,6 +692,21 @@ const batchGroupTarget = ref('');
 const isBatchUpdatingGroup = ref(false);
 const showAutoResetDialog = ref(false);
 const showCardGeneratorDialog = ref(false);
+
+// 批量获取试用链接
+const batchTrialLinkRunning = ref(false);
+const batchTrialLinkProgress = ref({ current: 0, total: 0, success: 0, failed: 0 });
+const batchTrialLinkStopped = ref(false);
+const batchTurnstileRef = ref<HTMLElement | null>(null);
+const batchTurnstileWidgetId = ref<string | null>(null);
+const showBatchTrialDialog = ref(false);
+interface BatchTrialAccount {
+  id: string;
+  email: string;
+  status: 'waiting' | 'turnstile' | 'getting_link' | 'opening' | 'filling' | 'submitting' | 'success' | 'failed';
+  error?: string;
+}
+const batchTrialAccounts = ref<BatchTrialAccount[]>([]);
 
 // 排序相关
 const currentSortField = ref<string>('custom');
@@ -1300,6 +1376,377 @@ async function handleBatchImportConfirm(
     batchImportDialogRef.value?.resetImporting();
     ElMessage.error(`批量导入失败: ${error}`);
   }
+}
+
+// 批量获取试用链接入口
+async function handleBatchGetTrialLink() {
+  const selectedIds = Array.from(accountsStore.selectedAccounts);
+  if (selectedIds.length === 0) {
+    ElMessage.warning('请先选择账号');
+    return;
+  }
+  await executeBatchGetTrialLink();
+}
+
+// 加载 Turnstile 脚本
+function loadTurnstileScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).turnstile) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Turnstile script'));
+    document.head.appendChild(script);
+  });
+}
+
+// YesCaptcha API 集成（通过 Tauri 后端调用）
+async function solveWithYesCaptcha(sitekey: string, pageUrl: string): Promise<string> {
+  const apiKey = settingsStore.settings?.yesCaptchaApiKey;
+  if (!apiKey) {
+    throw new Error('YesCaptcha API Key 未配置');
+  }
+
+  console.log('[YesCaptcha] 开始提交验证任务...');
+
+  try {
+    // 如果启用了代理，传递代理地址
+    const proxyUrl = settingsStore.settings?.proxyEnabled 
+      ? settingsStore.settings?.proxyUrl 
+      : null;
+
+    // 获取自定义 API 端点（如果配置了）
+    const apiEndpoint = settingsStore.settings?.yesCaptchaApiEndpoint || null;
+
+    const token = await invoke<string>('solve_turnstile_with_yescaptcha', {
+      apiKey,
+      sitekey,
+      pageUrl,
+      proxyUrl,
+      apiEndpoint
+    });
+    
+    console.log('[YesCaptcha] 验证成功！');
+    return token;
+  } catch (e) {
+    throw new Error(`YesCaptcha 验证失败: ${e}`);
+  }
+}
+
+// 获取一个新的 Turnstile token
+let _turnstileResolve: ((token: string) => void) | null = null;
+let _turnstileReject: ((err: Error) => void) | null = null;
+
+function obtainTurnstileToken(): Promise<string> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 检查是否启用 YesCaptcha
+      if (settingsStore.settings?.yesCaptchaEnabled && settingsStore.settings?.yesCaptchaApiKey) {
+        console.log('[Turnstile] 使用 YesCaptcha 自动验证');
+        try {
+          // Turnstile 验证码实际出现在 Codeium 的试用申请页面
+          const token = await solveWithYesCaptcha(
+            '0x4AAAAAAA447Bur1xJStKg5',
+            'https://www.codeium.com'
+          );
+          resolve(token);
+          return;
+        } catch (e) {
+          console.error('[YesCaptcha] 自动验证失败，回退到手动验证:', e);
+          ElMessage.warning(`YesCaptcha 验证失败: ${(e as Error).message}`);
+        }
+      }
+
+      // 回退到手动验证
+      await loadTurnstileScript();
+      await new Promise<void>((res) => {
+        const check = () => (window as any).turnstile ? res() : setTimeout(check, 100);
+        check();
+      });
+
+      const turnstile = (window as any).turnstile;
+      const container = batchTurnstileRef.value;
+      if (!container) {
+        reject(new Error('Turnstile 容器不可用'));
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        reject(new Error('Turnstile 验证超时'));
+      }, 30000);
+
+      _turnstileResolve = (token: string) => { clearTimeout(timeout); resolve(token); };
+      _turnstileReject = (err: Error) => { clearTimeout(timeout); reject(err); };
+
+      // 添加视觉提示
+      const addVisualHint = () => {
+        setTimeout(() => {
+          const iframe = container.querySelector('iframe');
+          if (iframe) {
+            iframe.style.border = '3px solid #409EFF';
+            iframe.style.boxShadow = '0 0 10px rgba(64, 158, 255, 0.5)';
+            iframe.style.animation = 'pulse 1.5s infinite';
+            
+            if (!document.getElementById('turnstile-pulse-animation')) {
+              const style = document.createElement('style');
+              style.id = 'turnstile-pulse-animation';
+              style.textContent = `
+                @keyframes pulse {
+                  0%, 100% { transform: scale(1); }
+                  50% { transform: scale(1.02); }
+                }
+              `;
+              document.head.appendChild(style);
+            }
+          }
+        }, 500);
+      };
+
+      // 如果已有 widget，用 reset 获取新 token
+      if (batchTurnstileWidgetId.value) {
+        turnstile.reset(batchTurnstileWidgetId.value);
+        addVisualHint();
+        return;
+      }
+
+      // 首次渲染
+      container.innerHTML = '';
+      batchTurnstileWidgetId.value = turnstile.render(container, {
+        sitekey: '0x4AAAAAAA447Bur1xJStKg5',
+        theme: 'light',
+        callback: (token: string) => {
+          if (_turnstileResolve) { _turnstileResolve(token); _turnstileResolve = null; }
+        },
+        'error-callback': () => {
+          if (_turnstileReject) { _turnstileReject(new Error('Turnstile 验证失败')); _turnstileReject = null; }
+        },
+        'expired-callback': () => {
+          if (_turnstileReject) { _turnstileReject(new Error('Turnstile token 已过期')); _turnstileReject = null; }
+        }
+      });
+
+      addVisualHint();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+// 一次性获取多个 Turnstile token（首次验证后，reset自动获取剩余token）
+async function obtainMultipleTurnstileTokens(count: number): Promise<string[]> {
+  const tokens: string[] = [];
+  for (let i = 0; i < count; i++) {
+    try {
+      const token = await obtainTurnstileToken();
+      tokens.push(token);
+    } catch (e) {
+      console.error(`[Turnstile] 获取第${i + 1}个token失败:`, e);
+      tokens.push('');
+    }
+  }
+  return tokens;
+}
+
+// 清理批量 Turnstile widget
+function cleanupBatchTurnstile() {
+  if (batchTurnstileWidgetId.value && (window as any).turnstile) {
+    try {
+      (window as any).turnstile.remove(batchTurnstileWidgetId.value);
+    } catch (_) { /* ignore */ }
+    batchTurnstileWidgetId.value = null;
+  }
+  if (batchTurnstileRef.value) {
+    batchTurnstileRef.value.innerHTML = '';
+  }
+}
+
+// 更新弹窗中某个账号的状态
+function updateAccStatus(id: string, status: BatchTrialAccount['status'], error?: string) {
+  const acc = batchTrialAccounts.value.find(a => a.id === id);
+  if (acc) {
+    acc.status = status;
+    if (error) acc.error = error;
+  }
+}
+
+// 批量获取试用链接核心逻辑（每批最多5个无痕窗口，循环处理所有账号）
+async function executeBatchGetTrialLink() {
+  const selectedIds = Array.from(accountsStore.selectedAccounts);
+  const BATCH_SIZE = 5;
+
+  const teamsTier = settingsStore.settings?.subscriptionPlan ?? 2;
+  const paymentPeriod = settingsStore.settings?.paymentPeriod ?? 1;
+  const teamName = teamsTier === 1 ? (settingsStore.settings?.teamName || undefined) : undefined;
+  const seatCount = settingsStore.settings?.seatCount ?? 1;
+  const needsCaptcha = teamsTier === 2;
+  const planName = teamsTier === 1 ? 'Teams' : 'Pro';
+  const periodName = paymentPeriod === 1 ? '月付' : '年付';
+  const totalBatches = Math.ceil(selectedIds.length / BATCH_SIZE);
+
+  try {
+    await ElMessageBox.confirm(
+      `将为选中的 ${selectedIds.length} 个账号批量获取试用链接（${planName} ${periodName}）。\n\n每批最多打开 ${BATCH_SIZE} 个应用内无痕窗口，共 ${totalBatches} 批。${needsCaptcha ? '\n\nPro 计划每次请求需要验证码，右下角会自动进行 Turnstile 验证。' : ''}\n\n是否继续？`,
+      '批量获取试用链接',
+      { confirmButtonText: '开始', cancelButtonText: '取消', type: 'info' }
+    );
+  } catch { return; }
+
+  // 初始化状态
+  batchTrialLinkRunning.value = true;
+  batchTrialLinkStopped.value = false;
+  batchTrialLinkProgress.value = { current: 0, total: selectedIds.length, success: 0, failed: 0 };
+  batchTrialAccounts.value = selectedIds.map(id => {
+    const account = accountsStore.accounts.find(a => a.id === id);
+    return { id, email: account?.email || id, status: 'waiting' as const };
+  });
+  showBatchTrialDialog.value = true;
+
+  // 按批次处理
+  for (let batchStart = 0; batchStart < selectedIds.length; batchStart += BATCH_SIZE) {
+    if (batchTrialLinkStopped.value) break;
+
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, selectedIds.length);
+    const batchIds = selectedIds.slice(batchStart, batchEnd);
+
+    // 批量获取 Turnstile token（首次需用户验证，后续 reset 自动获取）
+    let batchTokens: string[] = [];
+    if (needsCaptcha) {
+      batchIds.forEach(id => updateAccStatus(id, 'turnstile'));
+      batchTokens = await obtainMultipleTurnstileTokens(batchIds.length);
+    }
+
+    const batchLinks: Array<{ id: string; email: string; stripe_url: string }> = [];
+
+    for (let idx = 0; idx < batchIds.length; idx++) {
+      const id = batchIds[idx];
+      if (batchTrialLinkStopped.value) break;
+
+      const account = accountsStore.accounts.find(a => a.id === id);
+      if (!account) {
+        updateAccStatus(id, 'failed', '账号未找到');
+        batchTrialLinkProgress.value.current++;
+        batchTrialLinkProgress.value.failed++;
+        continue;
+      }
+
+      const turnstileToken = needsCaptcha ? (batchTokens[idx] || undefined) : undefined;
+      if (needsCaptcha && !turnstileToken) {
+        updateAccStatus(id, 'failed', '验证码获取失败');
+        batchTrialLinkProgress.value.current++;
+        batchTrialLinkProgress.value.failed++;
+        continue;
+      }
+
+      // 获取链接
+      updateAccStatus(id, 'getting_link');
+      try {
+        const result = await apiService.getTrialPaymentLink(
+          id, teamsTier, paymentPeriod, teamName,
+          teamsTier === 1 ? seatCount : undefined, turnstileToken
+        );
+
+        if (result.success && result.stripe_url) {
+          batchLinks.push({ id, email: account.email, stripe_url: result.stripe_url });
+        } else {
+          updateAccStatus(id, 'failed', result.error || '获取链接失败');
+          batchTrialLinkProgress.value.failed++;
+          batchTrialLinkProgress.value.current++;
+        }
+      } catch (error) {
+        updateAccStatus(id, 'failed', String(error));
+        batchTrialLinkProgress.value.failed++;
+        batchTrialLinkProgress.value.current++;
+      }
+    }
+
+    // 打开窗口 + 填写 + 提交（并行）
+    if (batchLinks.length > 0) {
+      // 标记为打开窗口中
+      batchLinks.forEach(link => updateAccStatus(link.id, 'opening'));
+
+      const windowLabels: Array<{ id: string; email: string; label: string }> = [];
+      await Promise.all(batchLinks.map(async (link, idx) => {
+        try {
+          const label = await invoke<string>('open_payment_window', { url: link.stripe_url, accountName: link.email, windowIndex: idx });
+          windowLabels.push({ id: link.id, email: link.email, label });
+        } catch (openErr) {
+          updateAccStatus(link.id, 'failed', '打开窗口失败');
+          batchTrialLinkProgress.value.failed++;
+          batchTrialLinkProgress.value.current++;
+        }
+      }));
+
+      // 预先为每个窗口生成随机卡信息（串行调用避免锁竞争）
+      const cardInfoMap = new Map<string, any>();
+      for (const win of windowLabels) {
+        try {
+          const randomCard = await invoke<any>('generate_virtual_card');
+          cardInfoMap.set(win.label, randomCard);
+        } catch (e) {
+          console.error(`生成卡信息失败(${win.email}):`, e);
+        }
+      }
+
+      // 标记所有窗口为填写中
+      windowLabels.forEach(win => updateAccStatus(win.id, 'filling'));
+
+      // 等待 8 秒让所有 Stripe 页面完全加载
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // 并行注入填写脚本（inject_simple_card_fill 无 State 锁，可安全并行）
+      await Promise.all(windowLabels.map(async (win) => {
+        try {
+          const randomCard = cardInfoMap.get(win.label);
+          if (!randomCard) throw new Error('卡信息生成失败');
+
+          await invoke('inject_simple_card_fill', {
+            windowLabel: win.label,
+            cardNumber: '6282 7148 0118 1910',
+            expiryDate: randomCard.expiry_date,
+            cvv: randomCard.cvv,
+            cardholderName: randomCard.cardholder_name,
+            country: randomCard.billing_address.country,
+            postalCode: randomCard.billing_address.postal_code,
+            state: randomCard.billing_address.state,
+            city: randomCard.billing_address.city,
+            district: randomCard.billing_address.street_address_line2 || undefined,
+            addressLine1: randomCard.billing_address.street_address,
+            addressLine2: undefined,
+          });
+
+          updateAccStatus(win.id, 'success');
+          batchTrialLinkProgress.value.success++;
+        } catch (err) {
+          updateAccStatus(win.id, 'failed', String(err));
+          batchTrialLinkProgress.value.failed++;
+        }
+        batchTrialLinkProgress.value.current++;
+      }));
+    }
+
+    // 如果还有下一批且未停止，等待用户确认
+    const hasMoreBatches = batchEnd < selectedIds.length && !batchTrialLinkStopped.value;
+    if (hasMoreBatches && batchLinks.length > 0) {
+      try {
+        await ElMessageBox.confirm(
+          `第 ${Math.floor(batchStart / BATCH_SIZE) + 1} 批已完成。\n还剩 ${selectedIds.length - batchEnd} 个账号，是否继续？`,
+          '继续下一批？',
+          { confirmButtonText: '继续', cancelButtonText: '停止', type: 'info' }
+        );
+      } catch {
+        batchTrialLinkStopped.value = true;
+      }
+    }
+  }
+
+  batchTrialLinkRunning.value = false;
+  cleanupBatchTurnstile();
+  accountsStore.clearSelection();
 }
 
 // 批量刷新状态（使用优化的批量 API，只保存一次）
@@ -2590,6 +3037,61 @@ onUnmounted(() => {
 
 :root.dark .batch-transfer-progress .progress-status {
   color: #a0aec0;
+}
+
+/* 批量试用链接进度弹窗 */
+.batch-trial-progress-content {
+  padding: 0;
+}
+
+.batch-trial-summary {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.batch-trial-summary strong {
+  font-size: 16px;
+}
+
+.batch-trial-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #fafafa;
+  border-left: 3px solid #dcdfe6;
+  transition: all 0.3s;
+}
+
+.batch-trial-item-email {
+  font-size: 13px;
+  color: #303133;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-trial-item-status {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  margin-left: 12px;
+}
+
+:root.dark .batch-trial-item {
+  background: #2d3748;
+}
+
+:root.dark .batch-trial-item-email {
+  color: #e5eaf3;
 }
 
 </style>

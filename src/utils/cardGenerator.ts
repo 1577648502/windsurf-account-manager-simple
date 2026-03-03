@@ -61,11 +61,13 @@ export async function getTrialPaymentLink(
  */
 export async function openPaymentWindow(
   url: string,
-  accountName: string
+  accountName: string,
+  windowIndex?: number
 ): Promise<void> {
   return await invoke('open_payment_window', {
     url,
-    accountName
+    accountName,
+    windowIndex
   });
 }
 

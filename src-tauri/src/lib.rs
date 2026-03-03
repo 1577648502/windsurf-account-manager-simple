@@ -106,6 +106,7 @@ pub fn run() {
             commands::get_trial_payment_link_enhanced,
             commands::open_external_link,
             commands::open_external_link_incognito,
+            commands::inject_simple_card_fill,
             commands::inject_auto_submit_script,
             commands::close_payment_window,
             commands::get_success_bins,
@@ -209,6 +210,9 @@ pub fn run() {
             commands::get_reset_records,
             commands::get_reset_stats,
             commands::clear_reset_records,
+            
+            // 验证码解决命令
+            commands::solve_turnstile_with_yescaptcha,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

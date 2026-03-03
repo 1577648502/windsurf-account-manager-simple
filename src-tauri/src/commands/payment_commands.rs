@@ -23,8 +23,10 @@ pub async fn open_payment_window(
     app: AppHandle,
     url: String,
     account_name: String,
+    window_index: Option<u32>,
 ) -> Result<String, String> {
-    let window_label = format!("payment-{}", chrono::Utc::now().timestamp_millis());
+    let idx = window_index.unwrap_or(0);
+    let window_label = format!("payment-{}-{}", chrono::Utc::now().timestamp_millis(), idx);
     let window_title = format!("Stripe 支付页面 - {} (隐私模式)", account_name);
     
     // 创建临时的用户数据目录（模拟Chrome的无痕模式）
@@ -39,6 +41,19 @@ pub async fn open_payment_window(
     
     println!("[Incognito] 创建临时用户数据目录: {:?}", user_data_dir);
     
+    // 固定窗口大小
+    let win_width: f64 = 500.0;
+    let win_height: f64 = 700.0;
+    
+    // 根据 window_index 计算窗口位置（依次排列，水平偏移）
+    let idx_f = idx as f64;
+    let base_x: f64 = 50.0;
+    let base_y: f64 = 50.0;
+    let offset_x: f64 = idx_f * (win_width + 10.0); // 每个窗口水平偏移 510px
+    let offset_y: f64 = 0.0; // 垂直位置不变
+    let pos_x = base_x + offset_x;
+    let pos_y = base_y + offset_y;
+    
     // 创建新的webview窗口（Chrome风格的无痕模式）
     let mut window_builder = WebviewWindowBuilder::new(
         &app,
@@ -46,11 +61,11 @@ pub async fn open_payment_window(
         WebviewUrl::External(url.parse().unwrap())
     )
     .title(window_title)
-    .inner_size(1200.0, 800.0)
-    .resizable(true)
+    .inner_size(win_width, win_height)
+    .resizable(false)
     .minimizable(true)
     .closable(true)
-    .center()
+    .position(pos_x, pos_y)
     .incognito(true)  // 启用无痕模式
     .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.130 Safari/537.36");  // Chrome 120最新版UA
     
@@ -477,6 +492,14 @@ async fn inject_card_info_internal(
                 }});
             }}
             
+            // 保存初始卡号（重试时始终使用这个卡号，不重新生成）
+            let initialCardNumber = '';
+            setTimeout(() => {{
+                const el = document.querySelector('#cardNumber') || document.querySelector('input[name="cardNumber"]');
+                if (el && el.value) initialCardNumber = el.value.replace(/\D/g, '');
+                console.log('[AutoFill] 保存初始卡号:', initialCardNumber);
+            }}, 3000);
+            
             // 卡段范围配置（用于重试时生成新卡号）
             const cardBinRange = '{}';  // 格式: "626200-626300" 或空
             const defaultCardBin = '{}';  // 默认卡头
@@ -594,12 +617,12 @@ async fn inject_card_info_internal(
                 return Math.floor(Math.random() * 900 + 100).toString();
             }}
             
-            // 清空并重新填写卡信息
+            // 清空并重新填写卡信息（始终使用初始卡号）
             function clearAndRefillCard() {{
                 retryCount++;
                 console.log(`[AutoFill] 🔄 重试第 ${{retryCount}} 次...`);
                 
-                const newCardNumber = generateCardNumber();
+                const newCardNumber = initialCardNumber || generateCardNumber();
                 const newExpiry = generateExpiryDate();
                 const newCvv = generateCvv();
                 
@@ -970,7 +993,7 @@ pub async fn get_trial_payment_link_enhanced(
     if let Some(stripe_url) = result.get("stripe_url").and_then(|v| v.as_str()) {
         if !stripe_url.is_empty() && auto_open {
             // 打开支付窗口（无痕模式）
-            let window_label = open_payment_window(app.clone(), stripe_url.to_string(), account_name.clone())
+            let window_label = open_payment_window(app.clone(), stripe_url.to_string(), account_name.clone(), None)
                 .await
                 .map_err(|e| e.to_string())?;
             
@@ -1202,6 +1225,134 @@ pub async fn auto_fill_payment_form(
         local_bin_pool,
     ).await?;
     
+    Ok(())
+}
+
+/// 简化版表单填写：直接用传入的卡信息填写，不走CardGenerator/重试/BIN池逻辑
+#[command]
+pub async fn inject_simple_card_fill(
+    app: AppHandle,
+    window_label: String,
+    card_number: String,
+    expiry_date: String,
+    cvv: String,
+    cardholder_name: String,
+    country: String,
+    postal_code: String,
+    state: String,
+    city: String,
+    district: Option<String>,
+    address_line1: String,
+    address_line2: Option<String>,
+) -> Result<(), String> {
+    let window = app.get_webview_window(&window_label)
+        .ok_or("Window not found".to_string())?;
+
+    let district_val = district.unwrap_or_default();
+    let line2_val = address_line2.unwrap_or_default();
+
+    let js_code = format!(r#"
+        (function() {{
+            console.log('[SimpleFill] 开始填写表单...');
+
+            function simulateTyping(element, value) {{
+                if (!element) return;
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                element.focus();
+                setter.call(element, value);
+                element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            }}
+
+            function waitForElement(selector, callback, timeout) {{
+                timeout = timeout || 15000;
+                var startTime = Date.now();
+                var checkElement = function() {{
+                    var element = document.querySelector(selector);
+                    if (!element && selector.startsWith('#')) {{
+                        var name = selector.substring(1);
+                        element = document.querySelector('input[name="' + name + '"]') ||
+                                 document.querySelector('select[name="' + name + '"]');
+                    }}
+                    if (!element) {{
+                        if (selector === '#cardNumber') element = document.querySelector('input[placeholder*="1234"]');
+                        else if (selector === '#cardExpiry') element = document.querySelector('input[placeholder*="/"]') || document.querySelector('input[placeholder*="月"]');
+                        else if (selector === '#cardCvc') element = document.querySelector('input[placeholder*="CVC"]') || document.querySelector('input[placeholder*="CVV"]');
+                        else if (selector === '#billingName') element = document.querySelector('input[placeholder*="全名"]') || document.querySelector('input[placeholder*="姓名"]');
+                    }}
+                    if (element) {{
+                        callback(element);
+                    }} else if (Date.now() - startTime > timeout) {{
+                        console.error('[SimpleFill] 元素未找到:', selector);
+                    }} else {{
+                        setTimeout(checkElement, 100);
+                    }}
+                }};
+                checkElement();
+            }}
+
+            // 填写卡号、有效期、CVC、姓名
+            waitForElement('#cardNumber', function(el) {{ simulateTyping(el, '{card_number}'); console.log('[SimpleFill] ✓ 卡号'); }});
+            waitForElement('#cardExpiry', function(el) {{ simulateTyping(el, '{expiry}'); console.log('[SimpleFill] ✓ 有效期'); }});
+            waitForElement('#cardCvc', function(el) {{ simulateTyping(el, '{cvv}'); console.log('[SimpleFill] ✓ CVC'); }});
+            waitForElement('#billingName', function(el) {{ simulateTyping(el, '{name}'); console.log('[SimpleFill] ✓ 姓名'); }});
+
+            // 选择国家
+            waitForElement('#billingCountry', function(el) {{
+                el.value = '{country}';
+                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                console.log('[SimpleFill] ✓ 国家');
+
+                setTimeout(function() {{
+                    waitForElement('#billingPostalCode', function(el) {{ simulateTyping(el, '{postal}'); console.log('[SimpleFill] ✓ 邮编'); }});
+                    waitForElement('#billingAdministrativeArea', function(el) {{
+                        var options = el.querySelectorAll('option');
+                        var found = false;
+                        for (var i = 0; i < options.length; i++) {{
+                            if (options[i].value === '{state}' || options[i].value.indexOf('{state}') >= 0 || options[i].text.indexOf('{state}') >= 0) {{
+                                el.value = options[i].value;
+                                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                found = true;
+                                break;
+                            }}
+                        }}
+                        if (!found) {{ el.value = '{state}'; el.dispatchEvent(new Event('change', {{ bubbles: true }})); }}
+                        console.log('[SimpleFill] ✓ 省份');
+                    }});
+                    waitForElement('#billingLocality', function(el) {{ simulateTyping(el, '{city}'); console.log('[SimpleFill] ✓ 城市'); }});
+                    waitForElement('#billingDependentLocality', function(el) {{
+                        var d = '{district}';
+                        if (d && d.trim() !== '') {{ simulateTyping(el, d); console.log('[SimpleFill] ✓ 地区'); }}
+                    }});
+                    waitForElement('#billingAddressLine1', function(el) {{ simulateTyping(el, '{line1}'); console.log('[SimpleFill] ✓ 地址1'); }});
+                    waitForElement('#billingAddressLine2', function(el) {{
+                        var l2 = '{line2}';
+                        if (l2 && l2.trim() !== '') {{ simulateTyping(el, l2); console.log('[SimpleFill] ✓ 地址2'); }}
+                    }});
+                    console.log('[SimpleFill] 🎉 表单填写完成');
+                }}, 500);
+            }});
+        }})();
+    "#,
+        card_number = card_number,
+        expiry = expiry_date,
+        cvv = cvv,
+        name = cardholder_name,
+        country = country,
+        postal = postal_code,
+        state = state,
+        city = city,
+        district = district_val,
+        line1 = address_line1,
+        line2 = line2_val,
+    );
+
+    window.eval(&js_code).map_err(|e| {
+        eprintln!("[SimpleFill] 执行JS失败: {}", e);
+        e.to_string()
+    })?;
+
+    println!("[SimpleFill] 已注入到窗口: {}", window_label);
     Ok(())
 }
 

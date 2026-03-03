@@ -326,6 +326,9 @@ export interface Settings {
   paymentPeriod?: number;  // 支付周期: 1=月付, 2=年付
   teamName?: string;  // Teams 计划的团队名称
   seatCount?: number;  // Teams 计划的席位数量
+  yesCaptchaEnabled?: boolean;  // 是否启用 YesCaptcha 自动验证
+  yesCaptchaApiKey?: string;  // YesCaptcha API Key
+  yesCaptchaApiEndpoint?: string;  // YesCaptcha API 端点（可选，默认使用官方端点）
 }
 
 /**
