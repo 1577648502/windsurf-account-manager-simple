@@ -1719,6 +1719,12 @@ async function executeBatchGetTrialLink() {
             addressLine2: undefined,
           });
 
+          // 填写完成后，自动提交表单
+          updateAccStatus(win.id, 'submitting');
+          await invoke('inject_auto_submit_script', {
+            windowLabel: win.label
+          });
+
           updateAccStatus(win.id, 'success');
           batchTrialLinkProgress.value.success++;
         } catch (err) {
