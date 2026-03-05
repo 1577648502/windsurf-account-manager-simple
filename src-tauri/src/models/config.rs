@@ -136,6 +136,10 @@ pub struct Settings {
     pub yes_captcha_api_key: String,  // YesCaptcha API Key
     #[serde(default, rename = "yesCaptchaApiEndpoint")]
     pub yes_captcha_api_endpoint: String,  // YesCaptcha API 端点（可选）
+    #[serde(default, rename = "capSolverEnabled")]
+    pub cap_solver_enabled: bool,  // 是否启用 CapSolver 自动验证
+    #[serde(default, rename = "capSolverApiKey")]
+    pub cap_solver_api_key: String,  // CapSolver API Key
     #[serde(default = "default_fixed_card_number", rename = "fixedCardNumber")]
     pub fixed_card_number: String,  // 固定卡号（不开启撞卡时使用）
     #[serde(default, rename = "collisionEnabled")]
@@ -220,6 +224,8 @@ impl Default for Settings {
             yes_captcha_enabled: false,  // 默认关闭 YesCaptcha
             yes_captcha_api_key: String::new(),  // 默认空 API Key
             yes_captcha_api_endpoint: String::new(),  // 默认空端点
+            cap_solver_enabled: false,  // 默认关闭 CapSolver
+            cap_solver_api_key: String::new(),  // 默认空 API Key
             fixed_card_number: "6282714801170210".to_string(),  // 默认固定卡号
             collision_enabled: false,  // 默认关闭撞卡模式
             collision_base_card: "6282714801189814".to_string(),  // 默认撞卡基础卡号

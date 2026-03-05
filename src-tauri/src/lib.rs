@@ -214,6 +214,7 @@ pub fn run() {
             
             // 验证码解决命令
             commands::solve_turnstile_with_yescaptcha,
+            commands::solve_turnstile_with_capsolver,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

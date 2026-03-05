@@ -189,6 +189,37 @@
               自定义 API 端点地址，如遇到网络问题可尝试修改（留空使用默认官方端点）
             </div>
           </el-form-item>
+          
+          <el-divider content-position="left">CapSolver 验证码服务</el-divider>
+          
+          <el-form-item label="启用 CapSolver">
+            <el-switch 
+              v-model="settings.capSolverEnabled"
+              active-text="开启"
+              inactive-text="关闭"
+            />
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              开启后，批量获取试用链接时将自动使用 CapSolver 解决 Turnstile 验证码（优先于 YesCaptcha）
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="CapSolver API Key" v-if="settings.capSolverEnabled">
+            <el-input
+              v-model="settings.capSolverApiKey"
+              placeholder="请输入 CapSolver API Key"
+              style="width: 350px;"
+              type="password"
+              show-password
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Key /></el-icon>
+              </template>
+            </el-input>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              在 <a href="https://www.capsolver.com/" target="_blank" style="color: #409EFF;">capsolver.com</a> 注册并获取 API Key
+            </div>
+          </el-form-item>
         </el-form>
       </el-tab-pane>
       

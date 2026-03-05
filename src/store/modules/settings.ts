@@ -17,6 +17,8 @@ const defaultSettings: Partial<Settings> = {
   yesCaptchaEnabled: false,
   yesCaptchaApiKey: '',
   yesCaptchaApiEndpoint: '',
+  capSolverEnabled: false,
+  capSolverApiKey: '',
 };
 
 export const useSettingsStore = defineStore('settings', () => {

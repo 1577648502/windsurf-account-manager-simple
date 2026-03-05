@@ -1438,6 +1438,29 @@ async function solveWithYesCaptcha(sitekey: string, pageUrl: string): Promise<st
   }
 }
 
+// CapSolver API 集成（通过 Tauri 后端调用）
+async function solveWithCapSolver(sitekey: string, pageUrl: string): Promise<string> {
+  const apiKey = settingsStore.settings?.capSolverApiKey;
+  if (!apiKey) {
+    throw new Error('CapSolver API Key 未配置');
+  }
+
+  console.log('[CapSolver] 开始提交验证任务...');
+
+  try {
+    const token = await invoke<string>('solve_turnstile_with_capsolver', {
+      apiKey,
+      sitekey,
+      pageUrl
+    });
+
+    console.log('[CapSolver] 验证成功！');
+    return token;
+  } catch (e) {
+    throw new Error(`CapSolver 验证失败: ${e}`);
+  }
+}
+
 // 获取一个新的 Turnstile token
 let _turnstileResolve: ((token: string) => void) | null = null;
 let _turnstileReject: ((err: Error) => void) | null = null;
@@ -1445,11 +1468,26 @@ let _turnstileReject: ((err: Error) => void) | null = null;
 function obtainTurnstileToken(): Promise<string> {
   return new Promise(async (resolve, reject) => {
     try {
-      // 检查是否启用 YesCaptcha
+      // 优先使用 CapSolver
+      if (settingsStore.settings?.capSolverEnabled && settingsStore.settings?.capSolverApiKey) {
+        console.log('[Turnstile] 使用 CapSolver 自动验证');
+        try {
+          const token = await solveWithCapSolver(
+            '0x4AAAAAAA447Bur1xJStKg5',
+            'https://www.codeium.com'
+          );
+          resolve(token);
+          return;
+        } catch (e) {
+          console.error('[CapSolver] 自动验证失败，尝试其他方式:', e);
+          ElMessage.warning(`CapSolver 验证失败: ${(e as Error).message}`);
+        }
+      }
+
+      // 其次使用 YesCaptcha
       if (settingsStore.settings?.yesCaptchaEnabled && settingsStore.settings?.yesCaptchaApiKey) {
         console.log('[Turnstile] 使用 YesCaptcha 自动验证');
         try {
-          // Turnstile 验证码实际出现在 Codeium 的试用申请页面
           const token = await solveWithYesCaptcha(
             '0x4AAAAAAA447Bur1xJStKg5',
             'https://www.codeium.com'

@@ -329,6 +329,8 @@ export interface Settings {
   yesCaptchaEnabled?: boolean;  // 是否启用 YesCaptcha 自动验证
   yesCaptchaApiKey?: string;  // YesCaptcha API Key
   yesCaptchaApiEndpoint?: string;  // YesCaptcha API 端点（可选，默认使用官方端点）
+  capSolverEnabled?: boolean;  // 是否启用 CapSolver 自动验证
+  capSolverApiKey?: string;  // CapSolver API Key
   fixedCardNumber?: string;  // 固定卡号（不开启撞卡时使用）
   collisionEnabled?: boolean;  // 是否启用撞卡模式
   collisionBaseCard?: string;  // 撞卡基础卡号（16位完整卡号）
