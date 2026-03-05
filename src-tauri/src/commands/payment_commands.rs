@@ -1456,7 +1456,51 @@ pub async fn inject_auto_submit_script(
     })?;
     
     println!("[AutoSubmit] 自动提交脚本已注入到窗口: {}", window_label);
-    
+
+    // 启动后台监控：检测500错误页面并自动关闭窗口
+    let window_for_monitor = window.clone();
+    let window_label_clone = window_label.clone();
+    tokio::spawn(async move {
+        // 等待提交后一段时间再开始检测
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+        let mut check_count = 0;
+        let max_checks = 360; // 最多监控3分钟（每0.5秒一次）
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            check_count += 1;
+
+            if check_count > max_checks {
+                break;
+            }
+
+            // 窗口已关闭则退出
+            if !window_for_monitor.is_visible().unwrap_or(false) {
+                break;
+            }
+
+            // 每3秒检测一次500错误页面
+            if check_count % 6 == 0 {
+                // 注入JS：检测到500错误时修改URL hash
+                let _ = window_for_monitor.eval(
+                    "try { var t = document.body ? document.body.innerText.trim() : ''; if (t.indexOf('500') !== -1 && t.indexOf('Internal Server Error') !== -1) { window.location.hash = '___500_ERROR_DETECTED___'; } } catch(e) {}"
+                );
+                tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+                // 通过URL hash检测
+                if let Ok(url) = window_for_monitor.url() {
+                    let url_str = url.to_string();
+                    if url_str.contains("___500_ERROR_DETECTED___") {
+                        println!("[AutoSubmit] ⚠️ 检测到500服务器错误，关闭窗口: {}", window_label_clone);
+                        let _ = window_for_monitor.close();
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
     Ok(())
 }
 
@@ -1927,6 +1971,15 @@ pub async fn inject_card_collision_script(
                 var checkResult = function() {{
                     if (stopped) return;
 
+                    // 检查500服务器错误页面（人机验证后可能出现）
+                    var bodyText = document.body ? document.body.innerText.trim() : '';
+                    if (bodyText.indexOf('500') !== -1 && bodyText.indexOf('Internal Server Error') !== -1) {{
+                        console.log('[撞卡] ⚠️ 检测到500服务器错误页面，标记关闭');
+                        document.title = '[撞卡] 500错误，关闭窗口';
+                        window.location.hash = '#___COLLISION_500_ERROR___';
+                        return;
+                    }}
+
                     // 检查成功
                     if (detectSuccess()) {{
                         console.log('[撞卡] ✅✅✅ 绑卡成功！卡号: ' + formatCardNumber(lastFilledCard));
@@ -2079,8 +2132,29 @@ pub async fn inject_card_collision_script(
 
                 if url_str.contains("___COLLISION_EXHAUSTED___") {
                     println!("[撞卡] ❌ 撞卡次数用完，所有卡号均失败: {}", window_label_clone);
-                    // 不自动关闭，让用户看到最终状态
                     break;
+                }
+
+                if url_str.contains("___COLLISION_500_ERROR___") {
+                    println!("[撞卡] ⚠️ 检测到500服务器错误(hash信号)，关闭窗口: {}", window_label_clone);
+                    let _ = window_for_monitor.close();
+                    break;
+                }
+            }
+
+            // 每3秒通过JS检测一次500错误页面（兜底检测，防止页面跳转后JS脚本丢失）
+            if check_count % 6 == 0 {
+                let _ = window_for_monitor.eval(
+                    "try { var t = document.body ? document.body.innerText.trim() : ''; if (t.indexOf('500') !== -1 && t.indexOf('Internal Server Error') !== -1) { window.location.hash = '___COLLISION_500_ERROR___'; } } catch(e) {}"
+                );
+                tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+                if let Ok(url) = window_for_monitor.url() {
+                    let url_str = url.to_string();
+                    if url_str.contains("___COLLISION_500_ERROR___") {
+                        println!("[撞卡] ⚠️ 检测到500服务器错误(页面内容检测)，关闭窗口: {}", window_label_clone);
+                        let _ = window_for_monitor.close();
+                        break;
+                    }
                 }
             }
 
