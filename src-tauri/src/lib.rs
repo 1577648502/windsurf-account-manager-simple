@@ -115,6 +115,7 @@ pub fn run() {
             commands::get_random_success_bin,
             commands::reset_test_mode_progress,
             commands::get_test_mode_progress,
+            commands::inject_card_collision_script,
             
             // Protobuf解析API命令（返回解析后的数据）
             commands::get_current_user_parsed,

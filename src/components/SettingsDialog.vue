@@ -322,6 +322,62 @@
             </div>
           </el-form-item>
           
+          <el-form-item label="固定卡号">
+            <el-input
+              v-model="settings.fixedCardNumber"
+              placeholder="请输入16位完整卡号"
+              maxlength="19"
+              @input="validateFixedCardNumber"
+            >
+              <template #append>
+                <el-button @click="resetFixedCardNumber">恢复默认</el-button>
+              </template>
+            </el-input>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              不开启撞卡时，批量绑卡使用的固定卡号（16位数字）
+            </div>
+          </el-form-item>
+          
+          <el-divider content-position="left">撞卡设置</el-divider>
+          
+          <el-form-item label="启用撞卡">
+            <el-switch v-model="settings.collisionEnabled" />
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              开启后，批量获取试用链接时将使用撞卡模式：自动递增卡号尝试绑卡，被拒绝自动换卡，卡号无效跳过
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="撞卡基础卡号">
+            <el-input
+              v-model="settings.collisionBaseCard"
+              placeholder="请输入16位完整卡号，如 6282714801189814"
+              maxlength="19"
+              :disabled="!settings.collisionEnabled"
+              @input="validateCollisionCard"
+            >
+              <template #append>
+                <el-button @click="resetCollisionCard" :disabled="!settings.collisionEnabled">恢复默认</el-button>
+              </template>
+            </el-input>
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              撞卡时的起始卡号（16位数字），系统会自动递增末几位尝试不同卡号。被拒绝自动换卡重试，卡号无效则跳过不提交
+            </div>
+          </el-form-item>
+          
+          <el-form-item label="撞卡最大尝试次数">
+            <el-input-number
+              v-model="settings.collisionMaxAttempts"
+              :min="1"
+              :max="9999"
+              :step="10"
+              :disabled="!settings.collisionEnabled"
+              controls-position="right"
+            />
+            <div style="margin-top: 5px; color: #909399; font-size: 12px;">
+              每个支付窗口最多尝试多少个不同卡号，从基础卡号开始递增
+            </div>
+          </el-form-item>
+          
           <el-divider content-position="left">卡BIN池功能</el-divider>
           
           <el-form-item label="测试模式">
@@ -566,6 +622,10 @@ const settings = reactive<{
   proxyUrl: string | null;
   useLightweightApi: boolean;
   cunzhiEnabled: boolean;
+  fixedCardNumber: string;
+  collisionEnabled: boolean;
+  collisionBaseCard: string;
+  collisionMaxAttempts: number;
 }>({
   auto_refresh_token: true,
   seat_count_options: [18, 19, 20],
@@ -594,6 +654,10 @@ const settings = reactive<{
   proxyUrl: null,  // 默认无代理地址
   useLightweightApi: true,  // 默认使用轻量级API
   cunzhiEnabled: false,  // 默认关闭伟哥功能
+  fixedCardNumber: '6282714801170210',  // 默认固定卡号
+  collisionEnabled: false,  // 默认关闭撞卡模式
+  collisionBaseCard: '6282714801189814',  // 默认撞卡基础卡号
+  collisionMaxAttempts: 100,  // 默认撞卡最大尝试次数
 });
 
 // 成功BIN池相关
@@ -778,6 +842,35 @@ function validateCardBinRange(value: string) {
 function clearCardBinRange() {
   settings.customCardBinRange = '';
   ElMessage.success('已清除卡段范围');
+}
+
+// 验证撞卡基础卡号
+function validateCollisionCard(value: string) {
+  // 只允许数字和空格
+  const cleaned = value.replace(/[^\d]/g, '');
+  settings.collisionBaseCard = cleaned;
+  
+  if (cleaned.length > 0 && cleaned.length !== 16) {
+    // 不弹提示，等用户输完
+  }
+}
+
+// 恢复默认撞卡卡号
+function resetCollisionCard() {
+  settings.collisionBaseCard = '6282714801189814';
+  ElMessage.success('已恢复默认撞卡基础卡号');
+}
+
+// 验证固定卡号
+function validateFixedCardNumber(value: string) {
+  const cleaned = value.replace(/[^\d]/g, '');
+  settings.fixedCardNumber = cleaned;
+}
+
+// 恢复默认固定卡号
+function resetFixedCardNumber() {
+  settings.fixedCardNumber = '6282714801170210';
+  ElMessage.success('已恢复默认固定卡号');
 }
 
 // 检测Windsurf路径

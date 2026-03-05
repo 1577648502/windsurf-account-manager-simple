@@ -9,7 +9,7 @@
           <span class="version-text">v{{ appVersion }}</span>
         </div>
       </div>
-      
+
       <el-menu
         :collapse="uiStore.sidebarCollapsed"
         :default-active="activeMenu"
@@ -21,14 +21,14 @@
           <el-icon><User /></el-icon>
           <template #title>账号管理</template>
         </el-menu-item>
-        
+
         <el-sub-menu index="groups">
           <template #title>
             <el-icon><Folder /></el-icon>
             <span>分组管理</span>
           </template>
-          <el-menu-item 
-            v-for="group in settingsStore.groups" 
+          <el-menu-item
+            v-for="group in settingsStore.groups"
             :key="group"
             :index="`group-${group}`"
             class="group-item"
@@ -50,40 +50,40 @@
             添加分组
           </el-menu-item>
         </el-sub-menu>
-        
+
         <el-menu-item index="logs" @click="uiStore.openLogsDialog">
           <el-icon><Document /></el-icon>
           <template #title>操作日志</template>
         </el-menu-item>
-        
+
         <el-menu-item index="stats" @click="uiStore.openStatsDialog">
           <el-icon><DataAnalysis /></el-icon>
           <template #title>统计信息</template>
         </el-menu-item>
-        
+
         <el-menu-item index="auto-reset" @click="showAutoResetDialog = true">
           <el-icon><Timer /></el-icon>
           <template #title>自动重置</template>
         </el-menu-item>
-        
+
         <el-menu-item index="card-generator" @click="showCardGeneratorDialog = true">
           <el-icon><CreditCard /></el-icon>
           <template #title>虚拟卡生成</template>
         </el-menu-item>
-        
+
         <el-menu-item index="about" @click="showAboutDialog">
           <el-icon><InfoFilled /></el-icon>
           <template #title>关于</template>
         </el-menu-item>
-        
+
         <el-menu-item index="settings" @click="uiStore.openSettingsDialog">
           <el-icon><Setting /></el-icon>
           <template #title>设置</template>
         </el-menu-item>
       </el-menu>
-      
+
       <div class="sidebar-footer">
-        <el-button 
+        <el-button
           :icon="uiStore.sidebarCollapsed ? ArrowRight : ArrowLeft"
           circle
           @click="uiStore.toggleSidebar"
@@ -113,7 +113,7 @@
               class="filter-toggle-btn"
             />
           </el-tooltip>
-          
+
           <!-- 排序选择器 -->
           <el-select
             v-model="currentSortField"
@@ -138,7 +138,7 @@
             />
           </el-tooltip>
         </div>
-        
+
         <div class="header-right">
           <!-- 批量删除 -->
           <el-tooltip content="批量删除" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
@@ -151,7 +151,7 @@
               />
             </el-badge>
           </el-tooltip>
-          
+
           <el-tooltip content="批量转让订阅" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
               type="success"
@@ -160,7 +160,7 @@
               @click="showBatchTransferDialog = true"
             />
           </el-tooltip>
-          
+
           <!-- 批量刷新状态 -->
           <el-tooltip content="批量刷新状态" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
@@ -170,7 +170,7 @@
               @click="handleBatchRefresh"
             />
           </el-tooltip>
-          
+
           <el-tooltip content="批量更换订阅" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
               type="primary"
@@ -179,7 +179,7 @@
               @click="showBatchUpdatePlanDialog = true"
             />
           </el-tooltip>
-          
+
           <el-tooltip content="批量获取试用链接" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
               type="primary"
@@ -189,7 +189,7 @@
               @click="handleBatchGetTrialLink"
             />
           </el-tooltip>
-          
+
           <!-- 导出选中账号 -->
           <el-tooltip content="导出选中账号" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
@@ -199,7 +199,7 @@
               @click="handleExportAccounts(true)"
             />
           </el-tooltip>
-          
+
           <!-- 批量更改分组 -->
           <el-tooltip content="批量更改分组" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
@@ -209,7 +209,7 @@
               @click="showBatchGroupDialog = true"
             />
           </el-tooltip>
-          
+
           <!-- 取消已选 -->
           <el-tooltip content="取消已选" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
@@ -219,7 +219,7 @@
               @click="accountsStore.clearSelection()"
             />
           </el-tooltip>
-          
+
           <!-- 选择本页账号 -->
           <el-tooltip content="选择本页账号" placement="bottom">
             <el-button
@@ -229,7 +229,7 @@
               @click="selectCurrentPageAccounts"
             />
           </el-tooltip>
-          
+
           <!-- 全选按钮（带分隔线） -->
           <el-tooltip content="全选" placement="bottom" class="select-all-button">
             <el-button
@@ -239,54 +239,54 @@
               @click="toggleSelectAll"
             />
           </el-tooltip>
-          
+
           <!-- 添加账号 -->
           <el-tooltip content="添加账号" placement="bottom">
-            <el-button 
-              type="default" 
-              :icon="Plus" 
-              circle 
-              @click="uiStore.openAddAccountDialog" 
+            <el-button
+              type="default"
+              :icon="Plus"
+              circle
+              @click="uiStore.openAddAccountDialog"
             />
           </el-tooltip>
-          
+
           <!-- 批量添加 -->
           <el-tooltip content="批量导入" placement="bottom">
-            <el-button 
-              type="default" 
+            <el-button
+              type="default"
               :icon="Upload"
-              circle 
+              circle
               @click="handleBatchImport"
             />
           </el-tooltip>
-          
+
           <!-- 导出账号 -->
           <el-tooltip content="导出账号" placement="bottom">
-            <el-button 
+            <el-button
               :icon="Download"
-              circle 
+              circle
               type="default"
               @click="handleExportAccounts"
             />
           </el-tooltip>
-          
+
           <!-- 标签管理 -->
           <el-tooltip content="标签管理" placement="bottom">
-            <el-button 
+            <el-button
               :icon="PriceTag"
-              circle 
+              circle
               type="default"
               @click="showTagManageDialog = true"
             />
           </el-tooltip>
-          
+
           <!-- 全局刷新 -->
           <el-tooltip content="刷新全部" placement="bottom">
-            <el-button 
-              :icon="RefreshRight" 
-              circle 
+            <el-button
+              :icon="RefreshRight"
+              circle
               type="default"
-              @click="refreshAccounts" 
+              @click="refreshAccounts"
             />
           </el-tooltip>
         </div>
@@ -367,7 +367,7 @@
         <div v-if="accountsStore.loading" class="loading-container">
           <el-icon class="is-loading" size="32"><Loading /></el-icon>
         </div>
-        
+
         <div v-else-if="accountsStore.filteredAccounts.length === 0" class="empty-container">
           <el-empty description="暂无账号数据">
             <el-button type="primary" @click="uiStore.openAddAccountDialog">
@@ -375,7 +375,7 @@
             </el-button>
           </el-empty>
         </div>
-        
+
         <div v-else class="accounts-container">
           <div class="accounts-grid">
             <AccountCard
@@ -388,7 +388,7 @@
               @update="handleAccountUpdate"
             />
           </div>
-          
+
           <!-- 分页组件 -->
           <div class="pagination-container" v-if="accountsStore.totalCount > accountsStore.pagination.pageSize">
             <el-pagination
@@ -410,27 +410,27 @@
     <AddAccountDialog />
     <EditAccountDialog />
     <SettingsDialog />
-    <BatchImportDialog 
-      v-model="showBatchImportDialog" 
-      @import="handleBatchImportConfirm" 
+    <BatchImportDialog
+      v-model="showBatchImportDialog"
+      @import="handleBatchImportConfirm"
       ref="batchImportDialogRef"
     />
     <LogsDialog />
     <StatsDialog />
     <AccountInfoDialog />
-    
+
     <!-- 关于对话框 -->
-    <AboutDialog 
+    <AboutDialog
       v-model="showAbout"
       :current-email="currentWindsurfEmail"
       :windsurf-version="windsurfVersion"
     />
-    
+
     <AutoResetDialog v-model="showAutoResetDialog" />
-    
+
     <!-- 虚拟卡生成对话框 -->
     <CardGeneratorDialog v-model="showCardGeneratorDialog" />
-    
+
     <!-- 批量试用链接进度弹窗 -->
     <el-dialog
       v-model="showBatchTrialDialog"
@@ -480,9 +480,9 @@
       <div style="font-size: 12px; color: #909399; margin-bottom: 4px; text-align: center;">验证中...</div>
       <div ref="batchTurnstileRef" class="cf-turnstile-batch"></div>
     </div>
-    
+
     <!-- 账单对话框（传入当前查看的账号ID和数据） -->
-    <BillingDialog 
+    <BillingDialog
       v-if="uiStore.currentViewingAccountId"
       v-model="uiStore.showBillingDialog"
       :account-id="uiStore.currentViewingAccountId"
@@ -490,22 +490,22 @@
       :loading="billingLoading"
       @refresh="refreshBillingData"
     />
-    
+
     <!-- 批量更换订阅对话框 -->
-    <BatchUpdatePlanDialog 
+    <BatchUpdatePlanDialog
       v-model="showBatchUpdatePlanDialog"
       :selected-account-ids="Array.from(accountsStore.selectedAccounts)"
       :accounts="accountsStore.accounts"
       @success="accountsStore.loadAccounts()"
     />
-    
+
     <!-- 标签管理对话框 -->
-    <TagManageDialog 
+    <TagManageDialog
       v-model="showTagManageDialog"
       :selected-account-ids="Array.from(accountsStore.selectedAccounts)"
       @refresh="accountsStore.loadAccounts()"
     />
-    
+
     <!-- 批量更改分组对话框 -->
     <el-dialog
       v-model="showBatchGroupDialog"
@@ -565,7 +565,7 @@
           <p style="color: #e6a23c; margin-top: 8px;">⚠️ 此操作不可撤销！</p>
         </template>
       </el-alert>
-      
+
       <el-form label-width="100px">
         <el-form-item label="目标邮箱">
           <el-input
@@ -589,7 +589,7 @@
           </div>
         </el-form-item>
       </el-form>
-      
+
       <!-- 转让进度显示 -->
       <div v-if="batchTransferring" class="batch-transfer-progress">
         <el-progress
@@ -601,7 +601,7 @@
           ({{ batchTransferProgress.current }}/{{ batchTransferProgress.total }})
         </div>
       </div>
-      
+
       <template #footer>
         <el-button @click="showBatchTransferDialog = false" :disabled="batchTransferring">取消</el-button>
         <el-button
@@ -768,24 +768,24 @@ const autoResetTimerMap = ref<Map<string, ReturnType<typeof setInterval>>>(new M
 async function initAutoResetTimers() {
   try {
     const configs = await invoke<AutoResetConfig[]>('get_auto_reset_configs');
-    
+
     // 清除现有定时器
     autoResetTimerMap.value.forEach(timer => clearInterval(timer));
     autoResetTimerMap.value.clear();
-    
+
     // 为每个启用的配置设置定时器
     configs.filter(c => c.enabled).forEach(config => {
       // 立即执行一次检查
       executeAutoResetCheck(config.id);
-      
+
       // 设置定时器
       const timer = setInterval(() => {
         executeAutoResetCheck(config.id);
       }, config.checkInterval * 60 * 1000);
-      
+
       autoResetTimerMap.value.set(config.id, timer);
     });
-    
+
     if (configs.filter(c => c.enabled).length > 0) {
       console.log(`[AutoReset] 已启动 ${configs.filter(c => c.enabled).length} 个自动重置定时器`);
     }
@@ -798,7 +798,7 @@ async function initAutoResetTimers() {
 async function executeAutoResetCheck(configId: string) {
   try {
     const result = await invoke<any>('check_and_auto_reset', { configId });
-    
+
     if (result.reset_count > 0) {
       ElMessage.success(`自动重置: 重置了 ${result.reset_count} 个账号的积分`);
       await accountsStore.loadAccounts();
@@ -926,35 +926,35 @@ async function refreshAccounts() {
     duration: 0,
     icon: Loading
   });
-  
+
   try {
     // 批量刷新所有账号（使用优化的批量 API）
     if (accountsStore.accounts.length > 0) {
       loading.close();
-      
+
       const totalCount = accountsStore.accounts.length;
       const allIds = accountsStore.accounts.map(a => a.id);
-      
+
       const progressLoading = ElMessage({
         message: `正在批量刷新 ${totalCount} 个账号...`,
         duration: 0,
         icon: Loading
       });
-      
+
       // 使用优化的批量刷新 API（后端只保存一次）
       const result = await apiService.batchRefreshTokens(allIds);
-      
+
       progressLoading.close();
-      
+
       const successCount = result.success_count || 0;
       const failedCount = totalCount - successCount;
-      
+
       // 使用后端返回的完整数据更新本地 store（无需重新加载页面）
       if (result.results) {
         for (const item of result.results) {
           const idx = accountsStore.accounts.findIndex(a => a.id === item.id);
           if (idx === -1) continue;
-          
+
           if (item.success && item.data) {
             const account = accountsStore.accounts[idx];
             if (item.data.plan_name) account.plan_name = item.data.plan_name;
@@ -974,7 +974,7 @@ async function refreshAccounts() {
           }
         }
       }
-      
+
       // 显示详细的刷新结果
       if (failedCount === 0) {
         ElMessage.success({
@@ -989,7 +989,7 @@ async function refreshAccounts() {
           return `  • ${account?.email || item.id}: ${item.error || '未知错误'}`;
         }).join('\n');
         const moreFailures = failedItems.length > 3 ? `\n  ... 还有 ${failedItems.length - 3} 个失败` : '';
-        
+
         ElMessage.warning({
           message: `⚠️ 刷新完成（部分失败）\n成功: ${successCount}/${totalCount}\n失败: ${failedCount}/${totalCount}\n\n失败账号:\n${failedDetails}${moreFailures}`,
           duration: 5000,
@@ -1018,7 +1018,7 @@ async function handleBatchDelete() {
         type: 'warning',
       }
     );
-    
+
     const result = await accountsStore.deleteSelectedAccounts();
     ElMessage.success(`成功删除 ${result?.success_count || 0} 个账号`);
   } catch (error) {
@@ -1032,12 +1032,12 @@ async function handleBatchDelete() {
 async function handleBatchTransfer() {
   const selectedIds = Array.from(accountsStore.selectedAccounts);
   const targetEmails = parsedTransferEmails.value;
-  
+
   if (selectedIds.length !== targetEmails.length) {
     ElMessage.warning('源账户数量与目标邮箱数量不匹配');
     return;
   }
-  
+
   try {
     await ElMessageBox.confirm(
       `确定要将 ${selectedIds.length} 个账户的订阅转让给对应的目标邮箱吗？\n\n转让后源账户将被移出团队，此操作不可撤销！`,
@@ -1051,16 +1051,16 @@ async function handleBatchTransfer() {
   } catch {
     return;
   }
-  
+
   batchTransferring.value = true;
   batchTransferProgress.value = { current: 0, total: selectedIds.length, status: '并发执行中...' };
-  
+
   // 构建转让任务列表
   const transferTasks = selectedIds.map((sourceId, index) => {
     const targetEmail = targetEmails[index];
     const sourceAccount = accountsStore.accounts.find(a => a.id === sourceId);
     const sourceEmail = sourceAccount?.email || sourceId;
-    
+
     return (async () => {
       try {
         const result = await invoke<any>('transfer_subscription', {
@@ -1068,13 +1068,13 @@ async function handleBatchTransfer() {
           targetEmail: targetEmail,
           targetName: targetEmail.split('@')[0]
         });
-        
+
         // 更新进度
         batchTransferProgress.value = {
           ...batchTransferProgress.value,
           current: batchTransferProgress.value.current + 1
         };
-        
+
         if (result.success) {
           return { sourceEmail, targetEmail, success: true };
         } else {
@@ -1089,21 +1089,21 @@ async function handleBatchTransfer() {
       }
     })();
   });
-  
+
   // 并发执行所有转让任务
   const results = await Promise.all(transferTasks);
-  
+
   batchTransferProgress.value = {
     current: selectedIds.length,
     total: selectedIds.length,
     status: '完成'
   };
-  
+
   batchTransferring.value = false;
-  
+
   const successCount = results.filter(r => r.success).length;
   const failedCount = results.filter(r => !r.success).length;
-  
+
   if (failedCount === 0) {
     ElMessage.success(`批量转让完成！成功: ${successCount}/${selectedIds.length}`);
   } else {
@@ -1118,12 +1118,12 @@ async function handleBatchTransfer() {
       showClose: true
     });
   }
-  
+
   // 关闭对话框并清理
   showBatchTransferDialog.value = false;
   batchTransferEmails.value = '';
   accountsStore.clearSelection();
-  
+
   // 刷新账号列表
   await accountsStore.loadAccounts();
 }
@@ -1132,7 +1132,7 @@ async function refreshBillingData() {
   if (uiStore.currentViewingAccountId) {
     billingLoading.value = true;
     currentBillingData.value = null;
-    
+
     try {
       const result = await apiService.getBilling(uiStore.currentViewingAccountId);
       currentBillingData.value = result;
@@ -1173,10 +1173,10 @@ function selectCurrentPageAccounts() {
     ElMessage.info('当前页没有账号');
     return;
   }
-  
+
   // 检查本页是否已全部选中
   const allSelected = pageAccounts.every(acc => accountsStore.selectedAccounts.has(acc.id));
-  
+
   if (allSelected) {
     // 如果本页已全选，则取消本页选择
     pageAccounts.forEach(account => {
@@ -1208,9 +1208,9 @@ async function handleBatchImportConfirm(
   // 获取并发设置
   const unlimitedConcurrent = settingsStore.settings?.unlimitedConcurrentRefresh || false;
   const concurrencyLimit = settingsStore.settings?.concurrent_limit || 5;
-  
+
   const modeLabel = mode === 'refresh_token' ? 'Refresh Token' : '邮箱密码';
-  
+
   // 显示进度提示
   let progressMsg = ElMessage({
     message: unlimitedConcurrent
@@ -1219,9 +1219,9 @@ async function handleBatchImportConfirm(
     duration: 0,
     icon: Loading
   });
-  
+
   const results: Array<{ email: string; success: boolean; accountId?: string; error?: string }> = [];
-  
+
   // 单个导入任务
   const importTask = async (item: { email: string; password: string; remark: string; refreshToken?: string }) => {
     try {
@@ -1233,7 +1233,7 @@ async function handleBatchImportConfirm(
           tags: tags.length > 0 ? [...tags] : [],
           group: group
         });
-        
+
         if (result.success) {
           return { email: result.email, success: true, accountId: result.account?.id };
         } else {
@@ -1255,7 +1255,7 @@ async function handleBatchImportConfirm(
       return { email: item.email, success: false, error: String(error) };
     }
   };
-  
+
   try {
     if (unlimitedConcurrent) {
       // 全量并发导入
@@ -1267,7 +1267,7 @@ async function handleBatchImportConfirm(
         const batch = accountsToImport.slice(i, i + concurrencyLimit);
         const batchResults = await Promise.all(batch.map(item => importTask(item)));
         results.push(...batchResults);
-        
+
         // 更新进度
         progressMsg.close();
         progressMsg = ElMessage({
@@ -1277,11 +1277,11 @@ async function handleBatchImportConfirm(
         });
       }
     }
-    
+
     // 统计添加结果
     const addedAccounts = results.filter(r => r.success);
     const failedAccounts = results.filter(r => !r.success);
-    
+
     // 并发登录成功添加的账号（refresh_token 模式已经获取了账号信息，无需再登录）
     let loginSuccessCount = 0;
     if (autoLogin && addedAccounts.length > 0 && mode === 'password') {
@@ -1293,7 +1293,7 @@ async function handleBatchImportConfirm(
         duration: 0,
         icon: Loading
       });
-      
+
       // 单个登录任务
       const loginTask = async (item: { email: string; accountId?: string }) => {
         try {
@@ -1310,9 +1310,9 @@ async function handleBatchImportConfirm(
           return { success: false };
         }
       };
-      
+
       const loginResults: Array<{ success: boolean }> = [];
-      
+
       if (unlimitedConcurrent) {
         // 全量并发登录
         const allLoginResults = await Promise.all(addedAccounts.map(item => loginTask(item)));
@@ -1323,7 +1323,7 @@ async function handleBatchImportConfirm(
           const batch = addedAccounts.slice(i, i + concurrencyLimit);
           const batchResults = await Promise.all(batch.map(item => loginTask(item)));
           loginResults.push(...batchResults);
-          
+
           // 更新进度
           progressMsg.close();
           progressMsg = ElMessage({
@@ -1333,16 +1333,16 @@ async function handleBatchImportConfirm(
           });
         }
       }
-      
+
       loginSuccessCount = loginResults.filter(r => r.success).length;
     }
-    
+
     progressMsg.close();
-    
+
     // 关闭对话框
     showBatchImportDialog.value = false;
     batchImportDialogRef.value?.resetImporting();
-    
+
     // 显示最终结果
     if (addedAccounts.length > 0) {
       let message = `成功导入 ${addedAccounts.length} 个账号`;
@@ -1416,8 +1416,8 @@ async function solveWithYesCaptcha(sitekey: string, pageUrl: string): Promise<st
 
   try {
     // 如果启用了代理，传递代理地址
-    const proxyUrl = settingsStore.settings?.proxyEnabled 
-      ? settingsStore.settings?.proxyUrl 
+    const proxyUrl = settingsStore.settings?.proxyEnabled
+      ? settingsStore.settings?.proxyUrl
       : null;
 
     // 获取自定义 API 端点（如果配置了）
@@ -1430,7 +1430,7 @@ async function solveWithYesCaptcha(sitekey: string, pageUrl: string): Promise<st
       proxyUrl,
       apiEndpoint
     });
-    
+
     console.log('[YesCaptcha] 验证成功！');
     return token;
   } catch (e) {
@@ -1491,7 +1491,7 @@ function obtainTurnstileToken(): Promise<string> {
             iframe.style.border = '3px solid #409EFF';
             iframe.style.boxShadow = '0 0 10px rgba(64, 158, 255, 0.5)';
             iframe.style.animation = 'pulse 1.5s infinite';
-            
+
             if (!document.getElementById('turnstile-pulse-animation')) {
               const style = document.createElement('style');
               style.id = 'turnstile-pulse-animation';
@@ -1681,7 +1681,7 @@ async function executeBatchGetTrialLink() {
         }
       }));
 
-      // 预先为每个窗口生成随机卡信息（串行调用避免锁竞争）
+      // 预先为每个窗口生成随机卡信息（用于填写地址等非卡号字段）
       const cardInfoMap = new Map<string, any>();
       for (const win of windowLabels) {
         try {
@@ -1698,41 +1698,82 @@ async function executeBatchGetTrialLink() {
       // 等待 8 秒让所有 Stripe 页面完全加载
       await new Promise(resolve => setTimeout(resolve, 8000));
 
-      // 并行注入填写脚本（inject_simple_card_fill 无 State 锁，可安全并行）
-      await Promise.all(windowLabels.map(async (win) => {
-        try {
-          const randomCard = cardInfoMap.get(win.label);
-          if (!randomCard) throw new Error('卡信息生成失败');
+      const collisionEnabled = settingsStore.settings?.collisionEnabled ?? false;
 
-          await invoke('inject_simple_card_fill', {
-            windowLabel: win.label,
-            cardNumber: '6282 7148 0118 1910',
-            expiryDate: randomCard.expiry_date,
-            cvv: randomCard.cvv,
-            cardholderName: randomCard.cardholder_name,
-            country: randomCard.billing_address.country,
-            postalCode: randomCard.billing_address.postal_code,
-            state: randomCard.billing_address.state,
-            city: randomCard.billing_address.city,
-            district: randomCard.billing_address.street_address_line2 || undefined,
-            addressLine1: randomCard.billing_address.street_address,
-            addressLine2: undefined,
-          });
+      if (collisionEnabled) {
+        // === 撞卡模式：自动递增卡号尝试绑卡 ===
+        const baseCardNumber = settingsStore.settings?.collisionBaseCard || '6282714801189814';
+        const maxCollisionAttempts = settingsStore.settings?.collisionMaxAttempts ?? 100;
 
-          // 填写完成后，自动提交表单
-          updateAccStatus(win.id, 'submitting');
-          await invoke('inject_auto_submit_script', {
-            windowLabel: win.label
-          });
+        await Promise.all(windowLabels.map(async (win) => {
+          try {
+            const randomCard = cardInfoMap.get(win.label);
+            if (!randomCard) throw new Error('卡信息生成失败');
 
-          updateAccStatus(win.id, 'success');
-          batchTrialLinkProgress.value.success++;
-        } catch (err) {
-          updateAccStatus(win.id, 'failed', String(err));
-          batchTrialLinkProgress.value.failed++;
-        }
-        batchTrialLinkProgress.value.current++;
-      }));
+            updateAccStatus(win.id, 'filling');
+            await invoke('inject_card_collision_script', {
+              windowLabel: win.label,
+              baseCardNumber: baseCardNumber,
+              expiryDate: randomCard.expiry_date,
+              cvv: randomCard.cvv,
+              cardholderName: randomCard.cardholder_name,
+              country: randomCard.billing_address.country,
+              postalCode: randomCard.billing_address.postal_code,
+              state: randomCard.billing_address.state,
+              city: randomCard.billing_address.city,
+              district: randomCard.billing_address.street_address_line2 || undefined,
+              addressLine1: randomCard.billing_address.street_address,
+              addressLine2: undefined,
+              maxAttempts: maxCollisionAttempts,
+            });
+
+            updateAccStatus(win.id, 'submitting');
+            batchTrialLinkProgress.value.success++;
+          } catch (err) {
+            updateAccStatus(win.id, 'failed', String(err));
+            batchTrialLinkProgress.value.failed++;
+          }
+          batchTrialLinkProgress.value.current++;
+        }));
+      } else {
+        // === 普通模式：使用随机虚拟卡填写并提交 ===
+        await Promise.all(windowLabels.map(async (win) => {
+          try {
+            const randomCard = cardInfoMap.get(win.label);
+            if (!randomCard) throw new Error('卡信息生成失败');
+
+            // 从设置中读取固定卡号，格式化为带空格的形式
+            const rawFixed = settingsStore.settings?.fixedCardNumber || '6282714801170210';
+            const fixedCardNumber = rawFixed.replace(/(\d{4})(?=\d)/g, '$1 ');
+            await invoke('inject_simple_card_fill', {
+              windowLabel: win.label,
+              cardNumber: fixedCardNumber,
+              expiryDate: randomCard.expiry_date,
+              cvv: randomCard.cvv,
+              cardholderName: randomCard.cardholder_name,
+              country: randomCard.billing_address.country,
+              postalCode: randomCard.billing_address.postal_code,
+              state: randomCard.billing_address.state,
+              city: randomCard.billing_address.city,
+              district: randomCard.billing_address.street_address_line2 || undefined,
+              addressLine1: randomCard.billing_address.street_address,
+              addressLine2: undefined,
+            });
+
+            updateAccStatus(win.id, 'submitting');
+            await invoke('inject_auto_submit_script', {
+              windowLabel: win.label
+            });
+
+            updateAccStatus(win.id, 'success');
+            batchTrialLinkProgress.value.success++;
+          } catch (err) {
+            updateAccStatus(win.id, 'failed', String(err));
+            batchTrialLinkProgress.value.failed++;
+          }
+          batchTrialLinkProgress.value.current++;
+        }));
+      }
     }
 
     // 如果还有下一批且未停止，等待用户确认
@@ -1762,24 +1803,24 @@ async function handleBatchRefresh() {
     ElMessage.warning('请先选择账号');
     return;
   }
-  
+
   const totalCount = selectedIds.length;
-  
+
   const progressLoading = ElMessage({
     message: `正在批量刷新 ${totalCount} 个账号状态...`,
     duration: 0,
     icon: Loading
   });
-  
+
   try {
     // 使用优化的批量刷新 API（后端只保存一次）
     const result = await apiService.batchRefreshTokens(selectedIds);
-    
+
     progressLoading.close();
-    
+
     const successCount = result.success_count || 0;
     const failedCount = totalCount - successCount;
-    
+
     // 刷新成功的账号，从后端重新获取数据更新 store
     if (result.results) {
       for (const item of result.results) {
@@ -1806,7 +1847,7 @@ async function handleBatchRefresh() {
         }
       }
     }
-    
+
     // 显示结果
     if (failedCount === 0) {
       ElMessage.success(`刷新完成: 成功 ${successCount} 个`);
@@ -1817,7 +1858,7 @@ async function handleBatchRefresh() {
         const account = accountsStore.accounts.find(a => a.id === item.id);
         return `${account?.email || item.id}: ${item.error || '未知错误'}`;
       });
-      
+
       const moreCount = failedItems.length - 3;
       let message = `刷新完成（部分失败）\n成功: ${successCount}/${totalCount}\n失败: ${failedCount}/${totalCount}`;
       if (failedEmails.length > 0) {
@@ -1826,13 +1867,13 @@ async function handleBatchRefresh() {
           message += `\n... 还有 ${moreCount} 个失败`;
         }
       }
-      
+
       ElMessageBox.alert(message, '刷新结果', {
         type: 'warning',
         confirmButtonText: '确定'
       });
     }
-    
+
     accountsStore.clearSelection();
   } catch (error) {
     progressLoading.close();
@@ -1859,7 +1900,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         return;
       }
     }
-    
+
     // 创建 HTML 字符串形式的单选按钮
     const radioHtml = `
       <div style="padding: 20px 0;">
@@ -1909,7 +1950,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         </div>
       </div>
     `;
-    
+
     await ElMessageBox({
       title: '选择导出格式',
       message: radioHtml,
@@ -1928,7 +1969,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         done();
       }
     });
-    
+
     // 获取选中的值
     const selectedContentRadio = document.querySelector('input[name="exportContent"]:checked') as HTMLInputElement;
     const selectedFormatRadio = document.querySelector('input[name="exportFormat"]:checked') as HTMLInputElement;
@@ -1936,7 +1977,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
     const exportContent = selectedContentRadio ? selectedContentRadio.value : 'password';
     const format = selectedFormatRadio ? selectedFormatRadio.value : '1';
     const target = selectedTargetRadio ? selectedTargetRadio.value : 'file';
-    
+
     // 根据导出内容类型获取凭证
     const getCredential = (account: any) => {
       if (exportContent === 'refresh_token') {
@@ -1944,15 +1985,15 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
       }
       return account.password || '';
     };
-    
+
     const credentialLabel = exportContent === 'refresh_token' ? 'Refresh Token' : '密码';
     const credentialKey = exportContent === 'refresh_token' ? 'refresh_token' : 'password';
-    
+
     let content = '';
     let filename = '';
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
     const fileSuffix = exportContent === 'refresh_token' ? '_token' : '';
-    
+
     switch(format) {
       case '1': // CSV
         // 剪贴板不需要 BOM
@@ -1962,7 +2003,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         });
         filename = `accounts${fileSuffix}_${timestamp}.csv`;
         break;
-        
+
       case '2': // JSON
         content = JSON.stringify(accounts.map(account => ({
           email: account.email,
@@ -1974,7 +2015,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         })), null, 2);
         filename = `accounts${fileSuffix}_${timestamp}.json`;
         break;
-        
+
       case '3': // 文本
         accounts.forEach(account => {
           content += `${account.email} ${getCredential(account)}\n`;
@@ -1982,7 +2023,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
         filename = `accounts${fileSuffix}_${timestamp}.txt`;
         break;
     }
-    
+
     if (target === 'clipboard') {
       // 复制到剪贴板
       await navigator.clipboard.writeText(content);
@@ -1998,7 +2039,7 @@ async function handleExportAccounts(selectedOnly: boolean = false) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
       ElMessage.success(`已导出 ${accounts.length} 个账号`);
     }
   } catch (error) {
@@ -2016,7 +2057,7 @@ async function showAddGroupDialog() {
       inputPattern: /^.{1,20}$/,
       inputErrorMessage: '分组名称长度应为1-20个字符'
     });
-    
+
     await settingsStore.addGroup(value);
     ElMessage.success('分组添加成功');
   } catch (error) {
@@ -2035,14 +2076,14 @@ async function showRenameGroupDialog(oldName: string) {
       inputErrorMessage: '分组名称长度应为1-20个字符',
       inputValue: oldName
     });
-    
+
     if (value === oldName) {
       return;
     }
-    
+
     await settingsStore.renameGroup(oldName, value);
     ElMessage.success('分组重命名成功');
-    
+
     // 刷新账号列表
     await accountsStore.loadAccounts();
   } catch (error) {
@@ -2063,10 +2104,10 @@ async function showDeleteGroupConfirm(name: string) {
         type: 'warning'
       }
     );
-    
+
     await settingsStore.deleteGroup(name);
     ElMessage.success('分组删除成功');
-    
+
     // 刷新账号列表
     await accountsStore.loadAccounts();
   } catch (error) {
@@ -2104,18 +2145,18 @@ async function handleBatchUpdateGroup() {
     ElMessage.warning('请先选择账号');
     return;
   }
-  
+
   if (!batchGroupTarget.value) {
     ElMessage.warning('请选择目标分组');
     return;
   }
-  
+
   isBatchUpdatingGroup.value = true;
-  
+
   try {
     let successCount = 0;
     let failedCount = 0;
-    
+
     // 逐个更新账号的分组
     for (const id of selectedIds) {
       const account = accountsStore.accounts.find(a => a.id === id);
@@ -2130,14 +2171,14 @@ async function handleBatchUpdateGroup() {
         }
       }
     }
-    
+
     // 显示结果
     if (failedCount === 0) {
       ElMessage.success(`成功将 ${successCount} 个账号移动到"${batchGroupTarget.value}"分组`);
     } else {
       ElMessage.warning(`完成：成功 ${successCount} 个，失败 ${failedCount} 个`);
     }
-    
+
     // 关闭对话框并刷新
     closeBatchGroupDialog();
     accountsStore.clearSelection();
@@ -2157,7 +2198,7 @@ function showAboutDialog() {
 // 初始化时获取当前账号信息和应用版本
 onMounted(async () => {
   fetchCurrentWindsurfInfo();
-  
+
   // 获取应用版本号
   try {
     const versionInfo = await invoke<any>('get_app_version');
@@ -2165,10 +2206,10 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to get app version:', error);
   }
-  
+
   // 初始化排序配置
   initSortConfig();
-  
+
   // 初始化自动重置定时器
   initAutoResetTimers();
 });
@@ -2228,16 +2269,16 @@ onUnmounted(() => {
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
-  
+
   .el-icon {
     flex-shrink: 0;
   }
-  
+
   .app-title-text {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    
+
     .version-text {
       font-size: 12px;
       font-weight: normal;
@@ -2510,7 +2551,7 @@ onUnmounted(() => {
 
 /* 默认圆形按钮 - 统一的灰色风格 */
 .header-right :deep(.el-button--default.is-circle) {
-  color: #606266 !important;  
+  color: #606266 !important;
   background: #ffffff;
   border: 1px solid #dcdfe6;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -2597,14 +2638,14 @@ onUnmounted(() => {
   .el-message-box__message {
     padding: 0 !important;
   }
-  
+
   input[type="radio"] {
     accent-color: #409eff;
     width: 16px;
     height: 16px;
     vertical-align: middle;
   }
-  
+
   label:hover {
     background-color: #f5f7fa;
     border-radius: 6px;
@@ -2778,7 +2819,7 @@ onUnmounted(() => {
   .main-content {
     padding: 10px 6px;
   }
-  
+
   .accounts-grid {
     gap: 8px;
   }
@@ -2788,11 +2829,11 @@ onUnmounted(() => {
   .accounts-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .header-left {
     max-width: 200px;
   }
-  
+
   .main-content {
     padding: 8px 4px;
   }

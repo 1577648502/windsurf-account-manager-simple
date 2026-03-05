@@ -136,6 +136,14 @@ pub struct Settings {
     pub yes_captcha_api_key: String,  // YesCaptcha API Key
     #[serde(default, rename = "yesCaptchaApiEndpoint")]
     pub yes_captcha_api_endpoint: String,  // YesCaptcha API 端点（可选）
+    #[serde(default = "default_fixed_card_number", rename = "fixedCardNumber")]
+    pub fixed_card_number: String,  // 固定卡号（不开启撞卡时使用）
+    #[serde(default, rename = "collisionEnabled")]
+    pub collision_enabled: bool,  // 是否启用撞卡模式
+    #[serde(default = "default_collision_base_card", rename = "collisionBaseCard")]
+    pub collision_base_card: String,  // 撞卡基础卡号（16位完整卡号）
+    #[serde(default = "default_collision_max_attempts", rename = "collisionMaxAttempts")]
+    pub collision_max_attempts: i32,  // 撞卡最大尝试次数
 }
 
 fn default_browser_mode() -> String {
@@ -160,6 +168,18 @@ fn default_payment_period() -> i32 {
 
 fn default_seat_count() -> i32 {
     1  // 默认1个席位
+}
+
+fn default_fixed_card_number() -> String {
+    "6282714801170210".to_string()  // 默认固定卡号
+}
+
+fn default_collision_base_card() -> String {
+    "6282714801189814".to_string()  // 默认撞卡基础卡号
+}
+
+fn default_collision_max_attempts() -> i32 {
+    100  // 默认最大撞卡尝试次数
 }
 
 impl Default for Settings {
@@ -200,6 +220,10 @@ impl Default for Settings {
             yes_captcha_enabled: false,  // 默认关闭 YesCaptcha
             yes_captcha_api_key: String::new(),  // 默认空 API Key
             yes_captcha_api_endpoint: String::new(),  // 默认空端点
+            fixed_card_number: "6282714801170210".to_string(),  // 默认固定卡号
+            collision_enabled: false,  // 默认关闭撞卡模式
+            collision_base_card: "6282714801189814".to_string(),  // 默认撞卡基础卡号
+            collision_max_attempts: 100,  // 默认撞卡最大尝试次数
         }
     }
 }
