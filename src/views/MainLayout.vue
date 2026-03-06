@@ -180,6 +180,16 @@
             />
           </el-tooltip>
 
+          <el-tooltip content="批量取消订阅" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
+            <el-button
+              type="danger"
+              :icon="Close"
+              circle
+              :loading="batchCancelRunning"
+              @click="handleBatchCancelSubscription"
+            />
+          </el-tooltip>
+
           <el-tooltip content="批量获取试用链接" placement="bottom" v-if="accountsStore.selectedAccounts.size > 0">
             <el-button
               type="primary"
@@ -475,6 +485,46 @@
       </template>
     </el-dialog>
 
+    <!-- 批量取消订阅进度弹窗 -->
+    <el-dialog
+      v-model="showBatchCancelDialog"
+      title="批量取消订阅"
+      width="500px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="!batchCancelRunning"
+    >
+      <div>
+        <div style="display: flex; gap: 16px; margin-bottom: 8px; font-size: 14px;">
+          <span>总计: <strong>{{ batchCancelProgress.total }}</strong></span>
+          <span style="color: #67c23a;">成功: <strong>{{ batchCancelProgress.success }}</strong></span>
+          <span style="color: #f56c6c;">失败: <strong>{{ batchCancelProgress.failed }}</strong></span>
+        </div>
+        <el-progress
+          :percentage="batchCancelProgress.total > 0 ? Math.round((batchCancelProgress.current / batchCancelProgress.total) * 100) : 0"
+          :stroke-width="10"
+          style="margin: 12px 0;"
+        />
+        <div style="max-height: 350px; overflow-y: auto;">
+          <div
+            v-for="item in batchCancelItems"
+            :key="item.email"
+            style="display: flex; justify-content: space-between; padding: 6px 8px; border-left: 3px solid; margin-bottom: 4px; font-size: 13px;"
+            :style="{ borderLeftColor: item.status === 'success' ? '#67c23a' : item.status === 'failed' ? '#f56c6c' : item.status === 'running' ? '#409eff' : '#dcdfe6' }"
+          >
+            <span>{{ item.email }}</span>
+            <span :style="{ color: item.status === 'success' ? '#67c23a' : item.status === 'failed' ? '#f56c6c' : item.status === 'running' ? '#409eff' : '#909399' }">
+              <el-icon v-if="item.status === 'running'" class="is-loading" style="margin-right: 2px;"><Loading /></el-icon>
+              {{ item.status === 'waiting' ? '等待中' : item.status === 'running' ? '取消中...' : item.status === 'success' ? '✓ 已取消' : '✗ ' + (item.error || '失败') }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button v-if="!batchCancelRunning" @click="showBatchCancelDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量试用链接的隐藏 Turnstile 容器（在batch操作期间保持在DOM中） -->
     <div v-show="batchTrialLinkRunning" style="position: fixed; bottom: 10px; right: 10px; z-index: 9999; background: white; border-radius: 8px; padding: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);">
       <div style="font-size: 12px; color: #909399; margin-bottom: 4px; text-align: center;">验证中...</div>
@@ -731,6 +781,65 @@ async function initSortConfig() {
   const field = accountsStore.sortConfig.field as string;
   currentSortField.value = (field === 'custom' ? 'created_at' : field) as any;
   sortDirection.value = accountsStore.sortConfig.direction;
+}
+
+// 批量取消订阅
+const batchCancelRunning = ref(false);
+const showBatchCancelDialog = ref(false);
+const batchCancelProgress = ref({ total: 0, current: 0, success: 0, failed: 0 });
+const batchCancelItems = ref<Array<{ email: string; id: string; status: 'waiting' | 'running' | 'success' | 'failed'; error?: string }>>([]);
+
+async function handleBatchCancelSubscription() {
+  const selectedIds = Array.from(accountsStore.selectedAccounts);
+  if (selectedIds.length === 0) { ElMessage.warning('请先选择账号'); return; }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要取消选中的 ${selectedIds.length} 个账号的订阅吗？`,
+      '批量取消订阅',
+      { confirmButtonText: '确认取消', cancelButtonText: '返回', type: 'warning' }
+    );
+  } catch { return; }
+
+  // 初始化进度
+  batchCancelItems.value = selectedIds.map(id => {
+    const acc = accountsStore.accounts.find(a => a.id === id);
+    return { email: acc?.email || id, id, status: 'waiting' as const };
+  });
+  batchCancelProgress.value = { total: selectedIds.length, current: 0, success: 0, failed: 0 };
+  batchCancelRunning.value = true;
+  showBatchCancelDialog.value = true;
+
+  for (let i = 0; i < selectedIds.length; i += 2) {
+    const batch = selectedIds.slice(i, i + 2);
+    const results = await Promise.allSettled(
+      batch.map(async id => {
+        const item = batchCancelItems.value.find(x => x.id === id)!;
+        item.status = 'running';
+        await apiService.refreshToken(id).catch(() => {});
+        const result = await apiService.cancelSubscription(id, 'too_expensive');
+        return { id, result };
+      })
+    );
+    results.forEach(r => {
+      const id = r.status === 'fulfilled' ? r.value.id : '';
+      const item = batchCancelItems.value.find(x => x.id === id);
+      if (r.status === 'fulfilled' && r.value.result.success) {
+        if (item) item.status = 'success';
+        batchCancelProgress.value.success++;
+      } else {
+        if (item) {
+          item.status = 'failed';
+          item.error = r.status === 'fulfilled' ? (r.value.result.raw_response || '失败') : String(r.reason);
+        }
+        batchCancelProgress.value.failed++;
+      }
+      batchCancelProgress.value.current++;
+    });
+  }
+
+  batchCancelRunning.value = false;
+  accountsStore.loadAccounts();
 }
 
 // 批量转让订阅
